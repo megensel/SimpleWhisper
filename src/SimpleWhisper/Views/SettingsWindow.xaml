@@ -75,9 +75,16 @@
                                             <Setter TargetName="Bd" Property="Background" Value="#FF585B70"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
-                                            <Setter Property="Foreground" Value="#FF1E1E2E"/>
+                                            <Setter TargetName="Bd" Property="Background" Value="#FF45475A"/>
                                         </Trigger>
+                                        <!-- Selected + hovered gets a brighter highlight -->
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsSelected" Value="True"/>
+                                                <Condition Property="IsHighlighted" Value="True"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="Bd" Property="Background" Value="#FF585B70"/>
+                                        </MultiTrigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
