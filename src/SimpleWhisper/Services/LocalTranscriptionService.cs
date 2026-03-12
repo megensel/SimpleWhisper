@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using Whisper.net;
+using Whisper.net.LibraryLoader;
+using SimpleWhisper.Helpers;
 using SimpleWhisper.Models;
 
 namespace SimpleWhisper.Services;
@@ -33,11 +35,35 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
 
     /// <summary>
     /// Valid Whisper model sizes in ascending order of accuracy (and resource usage).
+    /// Includes English-only variants (.en) which are faster for English transcription.
     /// </summary>
     private static readonly HashSet<string> ValidModelSizes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "tiny", "base", "small", "medium", "large"
+        "tiny", "base", "small", "medium", "large",
+        "tiny.en", "base.en", "small.en", "medium.en"
     };
+
+    /// <summary>
+    /// WAV file header size in bytes (standard RIFF/WAVE PCM header).
+    /// </summary>
+    private const int WavHeaderSize = 44;
+
+    /// <summary>
+    /// Number of 16-bit mono samples in a 20ms analysis window at 16 kHz.
+    /// </summary>
+    private const int SilenceWindowSamples = 320; // 16000 * 0.020
+
+    /// <summary>
+    /// RMS threshold below which a window is considered silence.
+    /// Conservative value to avoid trimming actual speech.
+    /// </summary>
+    private const double SilenceRmsThreshold = 0.005;
+
+    /// <summary>
+    /// Safety margin in samples to preserve on each side when trimming silence.
+    /// 100ms at 16 kHz = 1600 samples.
+    /// </summary>
+    private const int SilenceMarginSamples = 1600;
 
     #endregion
 
@@ -48,6 +74,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
 
     private WhisperProcessor? _processor;
     private string? _loadedModelPath;
+    private GpuAcceleration _loadedAcceleration;
     private bool _disposed;
 
     #endregion
@@ -138,7 +165,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Debug.WriteLine($"Local transcription error: {ex}");
+            AppLogger.Log($"Local transcription error: {ex}");
             return TranscriptionResult.Failure(
                 $"Local transcription error: {ex.Message}", stopwatch.Elapsed);
         }
@@ -185,6 +212,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
         string modelSize,
         string? language = null,
         string? prompt = null,
+        GpuAcceleration acceleration = GpuAcceleration.Auto,
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -199,23 +227,32 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
                 resolvedPath);
         }
 
-        // Skip reloading if the same model is already loaded.
+        // Skip reloading if the same model and acceleration mode are already loaded.
         lock (_processorLock)
         {
             if (_loadedModelPath is not null &&
-                string.Equals(_loadedModelPath, resolvedPath, StringComparison.OrdinalIgnoreCase))
+                string.Equals(_loadedModelPath, resolvedPath, StringComparison.OrdinalIgnoreCase) &&
+                _loadedAcceleration == acceleration)
             {
                 return;
             }
         }
+
+        // Configure the runtime probe order before loading the native library.
+        ConfigureRuntimeOrder(acceleration);
 
         // Build a new processor on a background thread (model loading can be slow).
         var newProcessor = await Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var builder = WhisperFactory.FromPath(resolvedPath)
+            bool useGpu = acceleration != GpuAcceleration.CpuOnly;
+            var options = new WhisperFactoryOptions { UseGpu = useGpu };
+
+            var builder = WhisperFactory.FromPath(resolvedPath, options)
                 .CreateBuilder()
+                .WithGreedySamplingStrategy()
+                .ParentBuilder
                 .WithThreads(Math.Max(1, Environment.ProcessorCount / 2));
 
             if (!string.IsNullOrWhiteSpace(language))
@@ -241,13 +278,43 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
             var oldProcessor = _processor;
             _processor = newProcessor;
             _loadedModelPath = resolvedPath;
+            _loadedAcceleration = acceleration;
 
             // Dispose the old processor after releasing it.
             oldProcessor?.Dispose();
         }
 
-        Debug.WriteLine($"Loaded Whisper model from: {resolvedPath}");
+        string runtimeInfo = RuntimeOptions.LoadedLibrary.HasValue
+            ? RuntimeOptions.LoadedLibrary.Value.ToString()
+            : "unknown";
+        AppLogger.Log($"Loaded Whisper model from: {resolvedPath} (runtime: {runtimeInfo})");
     }
+
+    /// <summary>
+    /// Configures the Whisper.net native library probe order based on the user's
+    /// GPU acceleration preference. Must be called before <see cref="WhisperFactory.FromPath"/>.
+    /// </summary>
+    private static void ConfigureRuntimeOrder(GpuAcceleration acceleration)
+    {
+        RuntimeOptions.RuntimeLibraryOrder = acceleration switch
+        {
+            GpuAcceleration.Cuda =>
+                [RuntimeLibrary.Cuda, RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+            GpuAcceleration.Vulkan =>
+                [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+            GpuAcceleration.CpuOnly =>
+                [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+            // Auto: use Whisper.net's default probe order
+            _ => [RuntimeLibrary.Cuda, RuntimeLibrary.Vulkan, RuntimeLibrary.OpenVino,
+                  RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+        };
+    }
+
+    /// <summary>
+    /// Gets the name of the currently loaded native runtime, or <c>null</c> if no model is loaded.
+    /// </summary>
+    public string? LoadedRuntimeName =>
+        RuntimeOptions.LoadedLibrary?.ToString();
 
     /// <summary>
     /// Downloads a Whisper GGML model of the specified size from Hugging Face to the
@@ -285,7 +352,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
         // If the model file already exists, skip the download.
         if (File.Exists(filePath))
         {
-            Debug.WriteLine($"Model already exists at: {filePath}");
+            AppLogger.Log($"Model already exists at: {filePath}");
             progressCallback?.Invoke(1.0);
             return filePath;
         }
@@ -293,7 +360,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
         string downloadUrl = string.Format(ModelDownloadBaseUrl, modelSize.ToLowerInvariant());
         string tempFilePath = filePath + ".downloading";
 
-        Debug.WriteLine($"Downloading Whisper model from: {downloadUrl}");
+        AppLogger.Log($"Downloading Whisper model from: {downloadUrl}");
 
         using var httpClient = new HttpClient();
         httpClient.Timeout = TimeSpan.FromHours(2); // Large models can take a long time.
@@ -341,7 +408,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
         // Atomically move the temp file to the final path.
         File.Move(tempFilePath, filePath, overwrite: true);
 
-        Debug.WriteLine($"Model downloaded successfully to: {filePath}");
+        AppLogger.Log($"Model downloaded successfully to: {filePath}");
         progressCallback?.Invoke(1.0);
 
         return filePath;
@@ -428,6 +495,122 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
                 $"Supported sizes are: {string.Join(", ", ValidModelSizes)}.",
                 nameof(modelSize));
         }
+    }
+
+    #endregion
+
+    #region Audio Processing
+
+    /// <summary>
+    /// Removes leading and trailing silence from a WAV byte array to reduce
+    /// Whisper inference time. Preserves a small margin on each side to avoid
+    /// clipping speech onset/offset. Returns the original data if it is too
+    /// short or if no meaningful silence is detected.
+    /// </summary>
+    /// <param name="wavData">A complete WAV file (16 kHz, 16-bit, mono PCM).</param>
+    /// <returns>A trimmed WAV byte array, or the original if trimming is not beneficial.</returns>
+    internal static byte[] TrimSilenceFromWav(byte[] wavData)
+    {
+        // Need at least a WAV header plus some samples to work with.
+        if (wavData.Length <= WavHeaderSize + SilenceWindowSamples * 2)
+            return wavData;
+
+        int pcmLength = wavData.Length - WavHeaderSize;
+        int totalSamples = pcmLength / 2; // 16-bit = 2 bytes per sample
+
+        // Find the first non-silent window from the start.
+        int firstVoiceSample = 0;
+        for (int i = 0; i <= totalSamples - SilenceWindowSamples; i += SilenceWindowSamples)
+        {
+            if (CalculateWindowRms(wavData, i) > SilenceRmsThreshold)
+            {
+                firstVoiceSample = i;
+                break;
+            }
+
+            firstVoiceSample = i + SilenceWindowSamples;
+        }
+
+        // Find the first non-silent window from the end.
+        int lastVoiceSample = totalSamples;
+        for (int i = totalSamples - SilenceWindowSamples; i >= 0; i -= SilenceWindowSamples)
+        {
+            if (CalculateWindowRms(wavData, i) > SilenceRmsThreshold)
+            {
+                lastVoiceSample = Math.Min(i + SilenceWindowSamples, totalSamples);
+                break;
+            }
+
+            lastVoiceSample = i;
+        }
+
+        // Apply safety margin (keep some silence on each side).
+        firstVoiceSample = Math.Max(0, firstVoiceSample - SilenceMarginSamples);
+        lastVoiceSample = Math.Min(totalSamples, lastVoiceSample + SilenceMarginSamples);
+
+        // If trimming wouldn't remove much, return the original.
+        int trimmedSamples = lastVoiceSample - firstVoiceSample;
+        if (trimmedSamples >= totalSamples - SilenceWindowSamples)
+            return wavData;
+
+        // Ensure we have at least some audio to transcribe.
+        if (trimmedSamples < SilenceWindowSamples)
+            return wavData;
+
+        int trimmedPcmBytes = trimmedSamples * 2;
+        int trimmedFileSize = WavHeaderSize + trimmedPcmBytes;
+        byte[] result = new byte[trimmedFileSize];
+
+        // Copy the original WAV header.
+        Array.Copy(wavData, 0, result, 0, WavHeaderSize);
+
+        // Update RIFF chunk size (bytes 4-7): total file size minus 8.
+        int riffChunkSize = trimmedFileSize - 8;
+        result[4] = (byte)(riffChunkSize & 0xFF);
+        result[5] = (byte)((riffChunkSize >> 8) & 0xFF);
+        result[6] = (byte)((riffChunkSize >> 16) & 0xFF);
+        result[7] = (byte)((riffChunkSize >> 24) & 0xFF);
+
+        // Update data subchunk size (bytes 40-43): trimmed PCM byte count.
+        result[40] = (byte)(trimmedPcmBytes & 0xFF);
+        result[41] = (byte)((trimmedPcmBytes >> 8) & 0xFF);
+        result[42] = (byte)((trimmedPcmBytes >> 16) & 0xFF);
+        result[43] = (byte)((trimmedPcmBytes >> 24) & 0xFF);
+
+        // Copy the trimmed PCM data.
+        int sourceOffset = WavHeaderSize + firstVoiceSample * 2;
+        Array.Copy(wavData, sourceOffset, result, WavHeaderSize, trimmedPcmBytes);
+
+        int trimmedMs = (totalSamples - trimmedSamples) * 1000 / 16000;
+        AppLogger.Log($"Trimmed {trimmedMs}ms of silence from audio ({wavData.Length} -> {result.Length} bytes)");
+
+        return result;
+    }
+
+    /// <summary>
+    /// Calculates the RMS (Root Mean Square) energy of a window of PCM samples
+    /// starting at the given sample index within a WAV byte array.
+    /// </summary>
+    private static double CalculateWindowRms(byte[] wavData, int sampleStart)
+    {
+        double sumSquares = 0;
+        int count = Math.Min(SilenceWindowSamples, (wavData.Length - WavHeaderSize) / 2 - sampleStart);
+
+        if (count <= 0)
+            return 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            int byteOffset = WavHeaderSize + (sampleStart + i) * 2;
+            if (byteOffset + 1 >= wavData.Length)
+                break;
+
+            short sample = (short)(wavData[byteOffset] | (wavData[byteOffset + 1] << 8));
+            double normalized = sample / 32768.0;
+            sumSquares += normalized * normalized;
+        }
+
+        return Math.Sqrt(sumSquares / count);
     }
 
     #endregion

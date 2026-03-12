@@ -66,7 +66,7 @@ public sealed class TranscriptionManager
         ITranscriptionService service = engine switch
         {
             TranscriptionEngine.Cloud => GetOrCreateCloudService(settings.OpenAIApiKey),
-            TranscriptionEngine.Local => GetOrCreateLocalService(),
+            TranscriptionEngine.Local => await GetOrCreateLocalServiceAsync(settings, language, prompt, cancellationToken),
             _ => throw new InvalidOperationException($"Unknown transcription engine: {engine}")
         };
 
@@ -82,7 +82,14 @@ public sealed class TranscriptionManager
 
         OnStatusChanged($"Transcribing with {service.EngineName}...");
 
-        var result = await service.TranscribeAsync(audioData, language, prompt, cancellationToken)
+        // Trim silence from audio before transcription for local engine (cloud handles its own processing).
+        byte[] processedAudio = audioData;
+        if (engine == TranscriptionEngine.Local && settings.TrimSilence)
+        {
+            processedAudio = LocalTranscriptionService.TrimSilenceFromWav(audioData);
+        }
+
+        var result = await service.TranscribeAsync(processedAudio, language, prompt, cancellationToken)
             .ConfigureAwait(false);
 
         if (result.IsSuccess)
@@ -120,16 +127,97 @@ public sealed class TranscriptionManager
     }
 
     /// <summary>
-    /// Gets the current local transcription service stub, or creates one lazily.
-    /// The local service is a placeholder until full Whisper.net integration is implemented.
+    /// Gets the current local transcription service, creating and loading the model if needed.
+    /// Passes the current GPU acceleration setting so the correct runtime is used.
     /// </summary>
-    private LocalTranscriptionService GetOrCreateLocalService()
+    private async Task<LocalTranscriptionService> GetOrCreateLocalServiceAsync(
+        AppSettings settings,
+        string? language,
+        string? prompt,
+        CancellationToken cancellationToken)
     {
+        LocalTranscriptionService service;
         lock (_serviceLock)
         {
             _localService ??= new LocalTranscriptionService();
-            return _localService;
+            service = _localService;
         }
+
+        // Ensure the model is loaded with the current settings (no-op if already loaded with same config).
+        await service.LoadModelAsync(
+            settings.LocalModelPath,
+            settings.LocalModelSize,
+            language,
+            prompt,
+            settings.GpuAcceleration,
+            cancellationToken).ConfigureAwait(false);
+
+        return service;
+    }
+
+    /// <summary>
+    /// Transcribes a single audio chunk using the local transcription engine.
+    /// Designed for real-time streaming: called repeatedly during recording with
+    /// independent audio chunks. Supports prompt chaining — pass the trailing text
+    /// from the previous chunk as <paramref name="previousContext"/> to give Whisper
+    /// cross-chunk context.
+    /// </summary>
+    /// <param name="audioData">
+    /// A byte array containing a complete WAV file for this chunk.
+    /// Expected format: 16 kHz, 16-bit, mono PCM.
+    /// </param>
+    /// <param name="previousContext">
+    /// Optional text from the previous chunk's transcription, used as a prompt to
+    /// maintain continuity across chunk boundaries. Pass <c>null</c> for the first chunk.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the transcription operation.</param>
+    /// <returns>
+    /// A <see cref="TranscriptionResult"/> containing the transcribed text for this chunk,
+    /// or a failure result if the operation did not succeed.
+    /// </returns>
+    public async Task<TranscriptionResult> TranscribeChunkAsync(
+        byte[] audioData,
+        string? previousContext = null,
+        CancellationToken cancellationToken = default)
+    {
+        var settings = _settingsService.Settings;
+        string? language = settings.AutoDetectLanguage ? null : settings.Language;
+
+        // Combine vocabulary prompt with previous-chunk context for continuity.
+        string? vocabPrompt = BuildVocabularyPrompt(settings.CustomVocabulary);
+        string? prompt = CombinePrompts(vocabPrompt, previousContext);
+
+        var service = await GetOrCreateLocalServiceAsync(settings, language, prompt, cancellationToken);
+
+        if (!service.IsAvailable)
+            return TranscriptionResult.Failure("Local transcription engine is not available.");
+
+        // Apply silence trimming to the chunk.
+        byte[] processedAudio = audioData;
+        if (settings.TrimSilence)
+        {
+            processedAudio = LocalTranscriptionService.TrimSilenceFromWav(audioData);
+        }
+
+        return await service.TranscribeAsync(processedAudio, language, prompt, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Combines a vocabulary prompt and previous-chunk context into a single prompt string.
+    /// </summary>
+    private static string? CombinePrompts(string? vocabPrompt, string? previousContext)
+    {
+        if (string.IsNullOrWhiteSpace(vocabPrompt) && string.IsNullOrWhiteSpace(previousContext))
+            return null;
+
+        if (string.IsNullOrWhiteSpace(previousContext))
+            return vocabPrompt;
+
+        if (string.IsNullOrWhiteSpace(vocabPrompt))
+            return previousContext;
+
+        return $"{vocabPrompt}. {previousContext}";
     }
 
     /// <summary>

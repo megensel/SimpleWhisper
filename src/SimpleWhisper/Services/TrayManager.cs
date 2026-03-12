@@ -165,8 +165,11 @@ public sealed class TrayManager : IDisposable
 
     private void OnAboutClick(object sender, RoutedEventArgs e)
     {
+        var version = typeof(TrayManager).Assembly.GetName().Version;
+        string versionString = version is not null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
+
         MessageBox.Show(
-            $"{AppTitle}\nVersion 1.0.0\n\nSpeech-to-text anywhere with a hotkey.",
+            $"{AppTitle}\nVersion {versionString}\n\nSpeech-to-text anywhere with a hotkey.",
             $"About {AppTitle}",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

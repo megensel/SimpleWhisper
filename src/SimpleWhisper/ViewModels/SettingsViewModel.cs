@@ -39,6 +39,9 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _selectedLanguage = string.Empty;
     private bool _autoDetectLanguage;
     private string _localModelSize = string.Empty;
+    private GpuAcceleration _gpuAcceleration;
+    private bool _trimSilence;
+    private bool _realtimeTranscription;
 
     // Text Processing
     private bool _spokenPunctuationEnabled;
@@ -124,6 +127,7 @@ public sealed class SettingsViewModel : ViewModelBase
             if (SetProperty(ref _startWithWindows, value))
             {
                 _settingsService.Settings.StartWithWindows = value;
+                StartupService.SetStartWithWindows(value);
                 SaveSettings();
             }
         }
@@ -307,14 +311,80 @@ public sealed class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// Available model sizes with size hints for the model size ComboBox.
+    /// Includes English-only (.en) variants that are faster for English transcription.
     /// </summary>
     public List<string> AvailableModelSizes { get; } =
     [
         "tiny",
+        "tiny.en",
         "base",
+        "base.en",
         "small",
+        "small.en",
         "medium",
+        "medium.en",
         "large"
+    ];
+
+    /// <summary>
+    /// Hardware acceleration mode for local Whisper inference.
+    /// </summary>
+    public GpuAcceleration GpuAcceleration
+    {
+        get => _gpuAcceleration;
+        set
+        {
+            if (SetProperty(ref _gpuAcceleration, value))
+            {
+                _settingsService.Settings.GpuAcceleration = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether to trim leading/trailing silence from audio before transcription.
+    /// Reduces inference time by skipping silent portions of the recording.
+    /// </summary>
+    public bool TrimSilence
+    {
+        get => _trimSilence;
+        set
+        {
+            if (SetProperty(ref _trimSilence, value))
+            {
+                _settingsService.Settings.TrimSilence = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether to show live transcription text in the overlay during recording.
+    /// Only applies to the local Whisper engine, which supports chunked processing.
+    /// </summary>
+    public bool RealtimeTranscription
+    {
+        get => _realtimeTranscription;
+        set
+        {
+            if (SetProperty(ref _realtimeTranscription, value))
+            {
+                _settingsService.Settings.RealtimeTranscription = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Available GPU acceleration options for the ComboBox.
+    /// </summary>
+    public List<GpuAccelerationItem> AvailableGpuOptions { get; } =
+    [
+        new(GpuAcceleration.Auto, "Auto-detect"),
+        new(GpuAcceleration.Cuda, "NVIDIA CUDA"),
+        new(GpuAcceleration.Vulkan, "Vulkan"),
+        new(GpuAcceleration.CpuOnly, "CPU Only"),
     ];
 
     // ──────────────────────────────────────────────────────────────────
@@ -446,6 +516,9 @@ public sealed class SettingsViewModel : ViewModelBase
         _selectedLanguage = s.Language;
         _autoDetectLanguage = s.AutoDetectLanguage;
         _localModelSize = s.LocalModelSize;
+        _gpuAcceleration = s.GpuAcceleration;
+        _trimSilence = s.TrimSilence;
+        _realtimeTranscription = s.RealtimeTranscription;
 
         // Text Processing
         _spokenPunctuationEnabled = s.SpokenPunctuationEnabled;
@@ -637,6 +710,21 @@ public sealed class LanguageItem(string code, string displayName)
     public string Code { get; } = code;
 
     /// <summary>Human-readable language name (e.g. "English").</summary>
+    public string DisplayName { get; } = displayName;
+
+    public override string ToString() => DisplayName;
+}
+
+/// <summary>
+/// Represents a GPU acceleration option for the ComboBox,
+/// with an enum value for persistence and a display name for the UI.
+/// </summary>
+public sealed class GpuAccelerationItem(GpuAcceleration value, string displayName)
+{
+    /// <summary>The <see cref="GpuAcceleration"/> enum value.</summary>
+    public GpuAcceleration Value { get; } = value;
+
+    /// <summary>Human-readable name (e.g. "NVIDIA CUDA").</summary>
     public string DisplayName { get; } = displayName;
 
     public override string ToString() => DisplayName;

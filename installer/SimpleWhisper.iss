@@ -1,0 +1,60 @@
+; SimpleWhisper Inno Setup Script
+; Requires Inno Setup 6+: https://jrsoftware.org/isinfo.php
+
+#define AppName "SimpleWhisper"
+#define AppVersion "1.1.0"
+#define AppPublisher "SimpleWhisper"
+#define AppExeName "SimpleWhisper.exe"
+#define AppDescription "Speech-to-text anywhere with a hotkey"
+
+[Setup]
+AppId={{7B2F8A3E-9D4C-4F1A-B5E6-8C7D9E0F1A2B}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
+AppPublisher={#AppPublisher}
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
+OutputDir=output
+OutputBaseFilename={#AppName}-Setup-{#AppVersion}
+Compression=lzma2/ultra64
+SolidCompression=yes
+SetupIconFile=..\src\SimpleWhisper\Assets\app.ico
+UninstallDisplayIcon={app}\{#AppExeName}
+PrivilegesRequired=lowest
+WizardStyle=modern
+DisableProgramGroupPage=yes
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
+
+[Files]
+Source: "..\src\SimpleWhisper\bin\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "{#AppDescription}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon; Comment: "{#AppDescription}"
+
+[Run]
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+
+[Registry]
+; Clean up the startup registry entry on uninstall.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "{#AppName}"; Flags: deletevalue uninsdeletevalue
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
+
+[Code]
+// Close the running instance before upgrading/uninstalling.
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  // Attempt to close the app gracefully via taskkill.
+  Exec('taskkill.exe', '/f /im {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;

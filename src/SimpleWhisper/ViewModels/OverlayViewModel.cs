@@ -183,6 +183,16 @@ public class OverlayViewModel : ViewModelBase
         AudioLevel = Math.Clamp(level, 0.0, 1.0);
     }
 
+    /// <summary>
+    /// Updates the live transcription text displayed during recording.
+    /// Called periodically as real-time transcription chunks complete.
+    /// </summary>
+    /// <param name="text">The accumulated transcription text so far.</param>
+    public void UpdateLiveText(string text)
+    {
+        TranscribedText = text;
+    }
+
     // ──────────────────────────────────────────────────────────────────
     //  Auto-hide timer helpers
     // ──────────────────────────────────────────────────────────────────

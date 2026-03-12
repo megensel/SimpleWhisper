@@ -10,8 +10,9 @@ namespace SimpleWhisper.Services;
 /// (with optional Ctrl/Alt/Shift modifiers) and fires activation/deactivation events.
 /// Supports both hold-to-record and toggle recording modes.
 ///
-/// Uses low-level Windows hooks via H.Hooks. All hooks are observational only and never
-/// swallow or block input from reaching other applications.
+/// Uses low-level Windows hooks via H.Hooks. Keyboard hooks are observational only and never
+/// block input. Mouse hooks suppress trigger-matching button events to prevent the
+/// configured mouse button (e.g. middle-click) from reaching other applications.
 /// </summary>
 public sealed class InputTriggerService : IDisposable
 {
@@ -99,7 +100,7 @@ public sealed class InputTriggerService : IDisposable
         {
             GenerateMouseMoveEvents = false, // We don't need move events.
             AddKeyboardKeys = false,         // We track modifiers ourselves via the keyboard hook.
-            Handling = false                 // Observational only — never block input.
+            Handling = true                  // Allows suppressing trigger button events via e.IsHandled.
         };
 
         _mouseHook.Down += OnMouseDown;
@@ -281,6 +282,10 @@ public sealed class InputTriggerService : IDisposable
         if (!AreModifiersSatisfied(trigger))
             return;
 
+        // Suppress the mouse event so it doesn't reach other applications
+        // (e.g. prevent middle-click from triggering auto-scroll or stealing focus).
+        e.IsHandled = true;
+
         // Filter repeats (shouldn't normally happen for mouse, but guard anyway).
         if (_isPressed)
             return;
@@ -324,6 +329,11 @@ public sealed class InputTriggerService : IDisposable
 
         if (!IsMatchingMouseButton(e.CurrentKey, trigger.MouseButton))
             return;
+
+        // Suppress the release event if we tracked the corresponding press,
+        // so the full click cycle is consumed and never reaches other apps.
+        if (_isPressed)
+            e.IsHandled = true;
 
         _isPressed = false;
 

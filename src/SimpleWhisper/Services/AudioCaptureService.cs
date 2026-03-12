@@ -24,10 +24,38 @@ public sealed class AudioCaptureService : IDisposable
     /// </summary>
     private const int Channels = 1;
 
+    /// <summary>
+    /// Size of a standard RIFF/WAVE header in bytes.
+    /// </summary>
+    private const int WavHeaderSize = 44;
+
+    /// <summary>
+    /// Minimum PCM bytes required for a useful audio chunk (~0.5 s at 16 kHz / 16-bit / mono).
+    /// </summary>
+    private const int MinChunkPcmBytes = 16_000;
+
     private WaveInEvent? _waveIn;
     private MemoryStream? _memoryStream;
     private WaveFileWriter? _waveFileWriter;
     private bool _disposed;
+
+    /// <summary>
+    /// Synchronizes concurrent access to the memory stream between the NAudio callback
+    /// thread (writes) and the chunked-extraction caller thread (reads).
+    /// </summary>
+    private readonly object _bufferLock = new();
+
+    /// <summary>
+    /// Byte offset into the memory stream marking the end of the last extracted chunk.
+    /// Reset to <see cref="WavHeaderSize"/> when a new recording starts.
+    /// </summary>
+    private long _lastChunkByteOffset;
+
+    /// <summary>
+    /// Tracks the highest RMS audio level observed during the current recording session.
+    /// Reset to zero when a new recording starts. Used to detect muted/silent recordings.
+    /// </summary>
+    private float _peakAudioLevel;
 
     /// <summary>
     /// Fired on each audio buffer with the calculated RMS audio level, normalized to a 0.0–1.0 range.
@@ -39,6 +67,12 @@ public sealed class AudioCaptureService : IDisposable
     /// Gets a value indicating whether the service is currently recording audio.
     /// </summary>
     public bool IsRecording { get; private set; }
+
+    /// <summary>
+    /// Gets the peak (maximum) RMS audio level observed during the most recent recording session.
+    /// A value near zero after recording indicates the microphone was muted or disconnected.
+    /// </summary>
+    public float PeakAudioLevel => _peakAudioLevel;
 
     /// <summary>
     /// Enumerates the available audio input (microphone) devices on the system.
@@ -82,6 +116,10 @@ public sealed class AudioCaptureService : IDisposable
 
         var waveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels);
         _waveFileWriter = new WaveFileWriter(_memoryStream, waveFormat);
+
+        // The WAV header occupies the first 44 bytes; PCM data starts after that.
+        _lastChunkByteOffset = WavHeaderSize;
+        _peakAudioLevel = 0f;
 
         _waveIn = new WaveInEvent
         {
@@ -140,13 +178,22 @@ public sealed class AudioCaptureService : IDisposable
     /// </summary>
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
-        if (_waveFileWriter is not null && e.BytesRecorded > 0)
-        {
-            _waveFileWriter.Write(e.Buffer, 0, e.BytesRecorded);
+        if (e.BytesRecorded <= 0)
+            return;
 
-            float rmsLevel = CalculateRmsLevel(e.Buffer, e.BytesRecorded);
-            AudioLevelChanged?.Invoke(rmsLevel);
+        lock (_bufferLock)
+        {
+            _waveFileWriter?.Write(e.Buffer, 0, e.BytesRecorded);
         }
+
+        // RMS calculation is read-only on e.Buffer — safe outside the lock.
+        float rmsLevel = CalculateRmsLevel(e.Buffer, e.BytesRecorded);
+
+        // Track peak level to detect muted/silent recordings.
+        if (rmsLevel > _peakAudioLevel)
+            _peakAudioLevel = rmsLevel;
+
+        AudioLevelChanged?.Invoke(rmsLevel);
     }
 
     /// <summary>
@@ -183,6 +230,110 @@ public sealed class AudioCaptureService : IDisposable
         }
 
         return audioData;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Chunked audio extraction (for real-time transcription)
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Extracts the audio recorded since the last call to this method (or since recording
+    /// started) as a standalone WAV byte array. The recording continues uninterrupted.
+    /// Returns an empty array if there is not enough new audio (less than ~0.5 s).
+    /// </summary>
+    /// <remarks>Thread-safe — may be called from any thread while recording is in progress.</remarks>
+    public byte[] GetAudioChunk()
+    {
+        lock (_bufferLock)
+        {
+            if (_memoryStream is null || _waveFileWriter is null || !IsRecording)
+                return [];
+
+            _waveFileWriter.Flush();
+
+            long currentPosition = _memoryStream.Position;
+            long chunkStart = _lastChunkByteOffset;
+
+            if (currentPosition - chunkStart < MinChunkPcmBytes)
+                return [];
+
+            int pcmLength = (int)(currentPosition - chunkStart);
+            byte[] pcmData = new byte[pcmLength];
+            Buffer.BlockCopy(_memoryStream.GetBuffer(), (int)chunkStart, pcmData, 0, pcmLength);
+
+            _lastChunkByteOffset = currentPosition;
+
+            return BuildWavFromPcm(pcmData);
+        }
+    }
+
+    /// <summary>
+    /// After <see cref="StopRecording"/> has been called, extracts any audio that was
+    /// recorded after the last <see cref="GetAudioChunk"/> call. Returns an empty array
+    /// if all audio was already consumed by previous chunk calls, or if the remaining
+    /// audio is too short to be useful.
+    /// </summary>
+    /// <param name="fullWav">
+    /// The complete WAV byte array returned by <see cref="StopRecording"/>.
+    /// </param>
+    public byte[] GetRemainingAudio(byte[] fullWav)
+    {
+        if (fullWav.Length <= WavHeaderSize)
+            return [];
+
+        long chunkStart = _lastChunkByteOffset;
+
+        // All audio was already consumed by chunked calls.
+        if (chunkStart >= fullWav.Length)
+            return [];
+
+        int pcmLength = fullWav.Length - (int)chunkStart;
+
+        if (pcmLength < MinChunkPcmBytes)
+            return [];
+
+        byte[] pcmData = new byte[pcmLength];
+        Buffer.BlockCopy(fullWav, (int)chunkStart, pcmData, 0, pcmLength);
+
+        return BuildWavFromPcm(pcmData);
+    }
+
+    /// <summary>
+    /// Builds a complete WAV file from raw PCM data using the standard audio format
+    /// (16 kHz, 16-bit, mono).
+    /// </summary>
+    private static byte[] BuildWavFromPcm(byte[] pcmData)
+    {
+        int dataSize = pcmData.Length;
+        int fileSize = WavHeaderSize + dataSize;
+        byte[] wav = new byte[fileSize];
+
+        int byteRate = SampleRate * Channels * (BitsPerSample / 8);
+        int blockAlign = Channels * (BitsPerSample / 8);
+
+        // RIFF header
+        wav[0] = (byte)'R'; wav[1] = (byte)'I'; wav[2] = (byte)'F'; wav[3] = (byte)'F';
+        BitConverter.TryWriteBytes(wav.AsSpan(4), fileSize - 8);       // ChunkSize
+        wav[8] = (byte)'W'; wav[9] = (byte)'A'; wav[10] = (byte)'V'; wav[11] = (byte)'E';
+
+        // fmt sub-chunk
+        wav[12] = (byte)'f'; wav[13] = (byte)'m'; wav[14] = (byte)'t'; wav[15] = (byte)' ';
+        BitConverter.TryWriteBytes(wav.AsSpan(16), 16);                 // Subchunk1Size (PCM)
+        BitConverter.TryWriteBytes(wav.AsSpan(20), (short)1);           // AudioFormat (PCM)
+        BitConverter.TryWriteBytes(wav.AsSpan(22), (short)Channels);
+        BitConverter.TryWriteBytes(wav.AsSpan(24), SampleRate);
+        BitConverter.TryWriteBytes(wav.AsSpan(28), byteRate);
+        BitConverter.TryWriteBytes(wav.AsSpan(32), (short)blockAlign);
+        BitConverter.TryWriteBytes(wav.AsSpan(34), (short)BitsPerSample);
+
+        // data sub-chunk
+        wav[36] = (byte)'d'; wav[37] = (byte)'a'; wav[38] = (byte)'t'; wav[39] = (byte)'a';
+        BitConverter.TryWriteBytes(wav.AsSpan(40), dataSize);           // Subchunk2Size
+
+        // PCM payload
+        Buffer.BlockCopy(pcmData, 0, wav, WavHeaderSize, dataSize);
+
+        return wav;
     }
 
     /// <summary>

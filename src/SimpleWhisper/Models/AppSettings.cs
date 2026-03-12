@@ -29,6 +29,25 @@ public enum TranscriptionEngine
 }
 
 /// <summary>
+/// Controls which hardware acceleration runtime is used for local Whisper inference.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GpuAcceleration
+{
+    /// <summary>Auto-detect: probes CUDA → Vulkan → OpenVINO → CPU in order.</summary>
+    Auto,
+
+    /// <summary>Force NVIDIA CUDA runtime (falls back to CPU if unavailable).</summary>
+    Cuda,
+
+    /// <summary>Force Vulkan runtime (falls back to CPU if unavailable).</summary>
+    Vulkan,
+
+    /// <summary>Skip all GPU runtimes and use CPU only.</summary>
+    CpuOnly
+}
+
+/// <summary>
 /// Determines where the recording/transcription overlay is positioned on screen.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -103,6 +122,29 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("localModelPath")]
     public string LocalModelPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which hardware acceleration runtime to use for local Whisper inference.
+    /// <see cref="GpuAcceleration.Auto"/> lets Whisper.net probe available runtimes automatically.
+    /// </summary>
+    [JsonPropertyName("gpuAcceleration")]
+    public GpuAcceleration GpuAcceleration { get; set; } = GpuAcceleration.Auto;
+
+    /// <summary>
+    /// When <c>true</c>, leading and trailing silence is trimmed from recorded audio
+    /// before transcription to reduce inference time. Enabled by default.
+    /// </summary>
+    [JsonPropertyName("trimSilence")]
+    public bool TrimSilence { get; set; } = true;
+
+    /// <summary>
+    /// When <c>true</c> and the local engine is selected, audio is transcribed in chunks
+    /// during recording, providing real-time visual feedback in the overlay. The chunked
+    /// results are concatenated as the final output, reducing perceived latency.
+    /// Has no effect when the cloud engine is selected.
+    /// </summary>
+    [JsonPropertyName("realtimeTranscription")]
+    public bool RealtimeTranscription { get; set; } = true;
 
     /// <summary>
     /// Zero-based index of the recording device from the system microphone list.

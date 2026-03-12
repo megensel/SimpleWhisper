@@ -215,9 +215,9 @@
                                 Width="{Binding AudioLevel, Converter={StaticResource AudioLevelToWidthConverter}, FallbackValue=0}" />
                     </Border>
 
-                    <!-- Transcribed text preview (during Done) -->
+                    <!-- Transcribed text preview (during Done and live during Recording) -->
                     <TextBlock Text="{Binding TranscribedText}"
-                               MaxWidth="200"
+                               MaxWidth="300"
                                TextTrimming="CharacterEllipsis"
                                FontFamily="Segoe UI"
                                FontSize="11"
@@ -228,6 +228,9 @@
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Done}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Recording}">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
