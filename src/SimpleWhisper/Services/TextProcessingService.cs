@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
+using SimpleWhisper.Helpers;
 using SimpleWhisper.Models;
 
 namespace SimpleWhisper.Services;
@@ -387,7 +387,7 @@ public static class TextProcessingService
             catch (RegexParseException ex)
             {
                 // Invalid regex pattern in user rule; skip it and log the error.
-                Debug.WriteLine(
+                AppLogger.Log(
                     $"Skipping invalid regex replacement rule '{rule.Find}': {ex.Message}");
             }
         }
