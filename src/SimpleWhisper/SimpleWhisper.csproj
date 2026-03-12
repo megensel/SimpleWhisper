@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="H.Hooks" Version="1.7.0" />
+    <PackageReference Include="H.InputSimulator" Version="1.5.0" />
+    <PackageReference Include="H.NotifyIcon" Version="2.4.1" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" NoWarn="NU1701" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="OpenAI" Version="2.9.1" />
+    <PackageReference Include="Whisper.net" Version="1.9.0" />
+    <PackageReference Include="Whisper.net.AllRuntimes" Version="1.9.0" />
+  </ItemGroup>
+
+</Project>

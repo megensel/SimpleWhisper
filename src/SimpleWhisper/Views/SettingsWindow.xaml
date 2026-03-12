@@ -1,0 +1,558 @@
+<Window x:Class="SimpleWhisper.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:SimpleWhisper.Views.Controls"
+        xmlns:models="clr-namespace:SimpleWhisper.Models"
+        xmlns:vm="clr-namespace:SimpleWhisper.ViewModels"
+        Title="SimpleWhisper Settings"
+        Width="600" Height="500"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF1E1E2E"
+        Foreground="#FFCDD6F4">
+
+    <Window.Resources>
+        <!-- BooleanToVisibility converter -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Common colors -->
+        <SolidColorBrush x:Key="PanelBg" Color="#FF313244"/>
+        <SolidColorBrush x:Key="SurfaceBg" Color="#FF45475A"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF89B4FA"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#FFCDD6F4"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#FFA6ADC8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#FF585B70"/>
+
+        <!-- TextBox style -->
+        <Style x:Key="DarkTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
+        </Style>
+
+        <!-- PasswordBox style -->
+        <Style x:Key="DarkPasswordBox" TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
+        </Style>
+
+        <!-- Implicit PasswordBox style -->
+        <Style TargetType="PasswordBox" BasedOn="{StaticResource DarkPasswordBox}"/>
+
+        <!-- Implicit TextBox style -->
+        <Style TargetType="TextBox" BasedOn="{StaticResource DarkTextBox}"/>
+
+        <!-- ComboBox style with dark dropdown -->
+        <Style x:Key="DarkComboBox" TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Background" Value="#FF313244"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        <Setter Property="Padding" Value="6,4"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#FF585B70"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
+                                            <Setter Property="Foreground" Value="#FF1E1E2E"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Implicit ComboBox style for all ComboBoxes (including DataGrid) -->
+        <Style TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}"/>
+
+        <!-- Button style -->
+        <Style x:Key="DarkButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF585B70"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF89B4FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Accent Button style -->
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource DarkButton}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="#FF1E1E2E"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- CheckBox style -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+
+        <!-- RadioButton style -->
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+
+        <!-- GroupBox style -->
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Padding" Value="10,6"/>
+        </Style>
+
+        <!-- Section header style -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Margin" Value="0,8,0,6"/>
+        </Style>
+
+        <!-- Label style -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <!-- DataGrid column header style -->
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#FF313244"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- DataGrid row header style -->
+        <Style TargetType="DataGridRowHeader">
+            <Setter Property="Background" Value="#FF313244"/>
+            <Setter Property="Width" Value="0"/>
+        </Style>
+
+        <!-- DataGrid cell style -->
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#FF585B70"/>
+                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ScrollBar dark theme -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- ToolTip dark theme -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="#FF313244"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        </Style>
+
+        <!-- Tab item style -->
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="tabBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="0,0,0,2"
+                                Padding="{TemplateBinding Padding}"
+                                Cursor="Hand">
+                            <ContentPresenter x:Name="contentPresenter"
+                                              ContentSource="Header"
+                                              HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="tabBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="tabBorder" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="0">
+        <TabControl Background="Transparent" BorderThickness="0" Padding="0">
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!--  GENERAL TAB                                -->
+            <!-- ═══════════════════════════════════════════ -->
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel>
+
+                        <!-- Shortcut Section -->
+                        <TextBlock Text="Shortcut" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Recording trigger" Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Text="{Binding TriggerDisplayName}" FontSize="14" FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Change..."
+                                        Style="{StaticResource DarkButton}"
+                                        Click="OnChangeTriggerClick"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Recording Mode Section -->
+                        <TextBlock Text="Recording Mode" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <RadioButton Content="Hold to Record (push-to-talk)"
+                                             IsChecked="{Binding IsRecordingHoldMode}"
+                                             GroupName="RecordingMode"/>
+                                <RadioButton Content="Toggle (press to start/stop)"
+                                             IsChecked="{Binding IsRecordingToggleMode}"
+                                             GroupName="RecordingMode"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Options Section -->
+                        <TextBlock Text="Options" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <CheckBox Content="Start with Windows" IsChecked="{Binding StartWithWindows}"/>
+                                <CheckBox Content="Play sound feedback" IsChecked="{Binding PlaySoundFeedback}"/>
+                                <CheckBox Content="Show recording overlay" IsChecked="{Binding ShowOverlay}"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!--  AUDIO TAB                                  -->
+            <!-- ═══════════════════════════════════════════ -->
+            <TabItem Header="Audio">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel>
+
+                        <!-- Microphone Section -->
+                        <TextBlock Text="Microphone" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Input device" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding AvailableDevices}"
+                                          SelectedIndex="{Binding SelectedDeviceIndex}"
+                                          Margin="0,0,0,10"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="1" Content="Test Microphone"
+                                            Style="{StaticResource DarkButton}"
+                                            Click="OnTestMicrophoneClick"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Audio Level Section -->
+                        <TextBlock Text="Audio Level" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Microphone input level" Style="{StaticResource FieldLabel}"/>
+                                <controls:AudioLevelIndicator x:Name="AudioLevel"
+                                                               Height="20"
+                                                               Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!--  TRANSCRIPTION TAB                          -->
+            <!-- ═══════════════════════════════════════════ -->
+            <TabItem Header="Transcription">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel>
+
+                        <!-- Engine Section -->
+                        <TextBlock Text="Engine" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <RadioButton Content="Cloud (OpenAI Whisper API)"
+                                             IsChecked="{Binding IsCloudEngine}"
+                                             GroupName="Engine"/>
+                                <RadioButton Content="Local (Whisper.net, runs on device)"
+                                             IsChecked="{Binding IsLocalEngine}"
+                                             GroupName="Engine"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Cloud Settings -->
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                                Visibility="{Binding IsCloudEngine, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Cloud Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="OpenAI API Key" Style="{StaticResource FieldLabel}"/>
+                                <PasswordBox x:Name="ApiKeyBox"
+                                             Style="{StaticResource DarkPasswordBox}"
+                                             PasswordChanged="OnApiKeyChanged"
+                                             MaxLength="200"
+                                             Margin="0,0,0,8"/>
+                                <TextBlock Margin="0,0,0,0">
+                                    <Hyperlink NavigateUri="https://platform.openai.com/api-keys"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="{StaticResource AccentBrush}">
+                                        Get an API key from OpenAI
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Local Settings -->
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                                Visibility="{Binding IsLocalEngine, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Local Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Model Size" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding AvailableModelSizes}"
+                                          SelectedItem="{Binding LocalModelSize}"
+                                          Margin="0,0,0,4"/>
+                                <TextBlock Text="tiny (~75MB) | base (~140MB) | small (~460MB) | medium (~1.5GB) | large (~3GB)"
+                                           Style="{StaticResource FieldLabel}" TextWrapping="Wrap" FontSize="11"
+                                           Margin="0,0,0,8"/>
+
+                                <Button Content="Download Model"
+                                        Style="{StaticResource DarkButton}"
+                                        Click="OnDownloadModelClick"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
+                                <ProgressBar x:Name="ModelDownloadProgress"
+                                             Height="6"
+                                             Minimum="0" Maximum="100" Value="0"
+                                             Background="{StaticResource SurfaceBg}"
+                                             Foreground="{StaticResource AccentBrush}"
+                                             Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Language Section -->
+                        <TextBlock Text="Language" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <CheckBox Content="Auto-detect language"
+                                          IsChecked="{Binding AutoDetectLanguage}"
+                                          Margin="0,0,0,8"/>
+                                <TextBlock Text="Language" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding AvailableLanguages}"
+                                          SelectedValuePath="Code"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValue="{Binding SelectedLanguage}"
+                                          IsEnabled="{Binding AutoDetectLanguage, Converter={x:Static controls:InverseBooleanConverter.Instance}}"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!--  TEXT PROCESSING TAB                         -->
+            <!-- ═══════════════════════════════════════════ -->
+            <TabItem Header="Text Processing">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel>
+
+                        <!-- Options -->
+                        <TextBlock Text="Processing Options" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <CheckBox Content="Enable spoken punctuation (e.g. &quot;period&quot; becomes &quot;.&quot;)"
+                                          IsChecked="{Binding SpokenPunctuationEnabled}"/>
+                                <CheckBox Content="Enable emoji insertion (e.g. &quot;smiley face&quot; becomes the emoji)"
+                                          IsChecked="{Binding EmojiInsertionEnabled}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Custom Vocabulary -->
+                        <TextBlock Text="Custom Vocabulary" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Add words or phrases to improve recognition (one per line)"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding CustomVocabularyText, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Height="80"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Text Replacements -->
+                        <TextBlock Text="Text Replacements" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <DataGrid x:Name="ReplacementsGrid"
+                                          ItemsSource="{Binding TextReplacements}"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          CanUserReorderColumns="False"
+                                          Background="{StaticResource SurfaceBg}"
+                                          Foreground="{StaticResource TextPrimary}"
+                                          BorderBrush="{StaticResource BorderBrush}"
+                                          RowBackground="{StaticResource SurfaceBg}"
+                                          AlternatingRowBackground="#FF3B3D50"
+                                          GridLinesVisibility="Horizontal"
+                                          HorizontalGridLinesBrush="{StaticResource BorderBrush}"
+                                          HeadersVisibility="Column"
+                                          MaxHeight="180"
+                                          CellEditEnding="OnReplacementCellEditEnding">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Find" Binding="{Binding Find}" Width="*" MinWidth="100">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="Padding" Value="4,2"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                            <DataGridTextColumn.EditingElementStyle>
+                                                <Style TargetType="TextBox">
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
+                                                </Style>
+                                            </DataGridTextColumn.EditingElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Replace" Binding="{Binding Replace}" Width="*" MinWidth="100">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="Padding" Value="4,2"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                            <DataGridTextColumn.EditingElementStyle>
+                                                <Style TargetType="TextBox">
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
+                                                </Style>
+                                            </DataGridTextColumn.EditingElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridComboBoxColumn Header="Type"
+                                                                SelectedItemBinding="{Binding Type}"
+                                                                Width="110">
+                                            <DataGridComboBoxColumn.ElementStyle>
+                                                <Style TargetType="ComboBox">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+                                                </Style>
+                                            </DataGridComboBoxColumn.ElementStyle>
+                                            <DataGridComboBoxColumn.EditingElementStyle>
+                                                <Style TargetType="ComboBox">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+                                                </Style>
+                                            </DataGridComboBoxColumn.EditingElementStyle>
+                                        </DataGridComboBoxColumn>
+                                        <DataGridCheckBoxColumn Header="Enabled"
+                                                                Binding="{Binding IsEnabled}"
+                                                                Width="65"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Right">
+                                    <Button Content="Add Rule"
+                                            Style="{StaticResource DarkButton}"
+                                            Command="{Binding AddReplacementCommand}"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="Remove"
+                                            Style="{StaticResource DarkButton}"
+                                            Command="{Binding RemoveReplacementCommand}"
+                                            CommandParameter="{Binding SelectedItem, ElementName=ReplacementsGrid}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Window>

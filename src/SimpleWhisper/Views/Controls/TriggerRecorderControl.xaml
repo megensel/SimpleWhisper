@@ -1,0 +1,147 @@
+<Window x:Class="SimpleWhisper.Views.Controls.TriggerRecorderControl"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Record Shortcut"
+        Width="400" Height="300"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="#FF1E1E2E"
+        Foreground="#FFCDD6F4"
+        KeyDown="OnWindowKeyDown"
+        MouseDown="OnWindowMouseDown">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="PanelBg" Color="#FF313244"/>
+        <SolidColorBrush x:Key="SurfaceBg" Color="#FF45475A"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF89B4FA"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#FFCDD6F4"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#FFA6ADC8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#FF585B70"/>
+
+        <Style x:Key="DarkButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF585B70"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF89B4FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource DarkButton}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="#FF1E1E2E"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Instruction -->
+        <TextBlock Grid.Row="0"
+                   x:Name="InstructionText"
+                   Text="Press a key or click a mouse button to set the trigger..."
+                   FontSize="14"
+                   TextWrapping="Wrap"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   Margin="0,0,0,16"/>
+
+        <!-- Trigger Type -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+            <RadioButton x:Name="KeyboardRadio"
+                         Content="Keyboard"
+                         IsChecked="True"
+                         Foreground="{StaticResource TextPrimary}"
+                         Margin="0,0,20,0"
+                         Checked="OnTriggerTypeChanged"/>
+            <RadioButton x:Name="MouseRadio"
+                         Content="Mouse"
+                         Foreground="{StaticResource TextPrimary}"
+                         Checked="OnTriggerTypeChanged"/>
+        </StackPanel>
+
+        <!-- Modifiers -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+            <CheckBox x:Name="CtrlCheck"
+                      Content="Ctrl"
+                      Foreground="{StaticResource TextPrimary}"
+                      Margin="0,0,16,0"
+                      Checked="OnModifierChanged"
+                      Unchecked="OnModifierChanged"/>
+            <CheckBox x:Name="AltCheck"
+                      Content="Alt"
+                      Foreground="{StaticResource TextPrimary}"
+                      Margin="0,0,16,0"
+                      Checked="OnModifierChanged"
+                      Unchecked="OnModifierChanged"/>
+            <CheckBox x:Name="ShiftCheck"
+                      Content="Shift"
+                      Foreground="{StaticResource TextPrimary}"
+                      Checked="OnModifierChanged"
+                      Unchecked="OnModifierChanged"/>
+        </StackPanel>
+
+        <!-- Captured Shortcut Display -->
+        <Border Grid.Row="3"
+                Background="{StaticResource PanelBg}"
+                CornerRadius="8"
+                Padding="16"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                MinWidth="200">
+            <TextBlock x:Name="CapturedDisplay"
+                       Text="(none)"
+                       FontSize="22"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Foreground="{StaticResource AccentBrush}"/>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="5"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="OK"
+                    Style="{StaticResource AccentButton}"
+                    Width="80"
+                    Click="OnOkClick"
+                    Margin="0,0,8,0"/>
+            <Button Content="Cancel"
+                    Style="{StaticResource DarkButton}"
+                    Width="80"
+                    Click="OnCancelClick"/>
+        </StackPanel>
+    </Grid>
+</Window>
