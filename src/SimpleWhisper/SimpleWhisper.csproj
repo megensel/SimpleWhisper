@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Version and packaging metadata -->
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <AssemblyTitle>SimpleWhisper</AssemblyTitle>
     <Description>Speech-to-text anywhere with a hotkey</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
