@@ -24,6 +24,8 @@ UninstallDisplayIcon={app}\{#AppExeName}
 PrivilegesRequired=lowest
 WizardStyle=modern
 DisableProgramGroupPage=yes
+CloseApplications=yes
+RestartApplications=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
