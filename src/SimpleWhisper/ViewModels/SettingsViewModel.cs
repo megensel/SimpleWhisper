@@ -29,6 +29,7 @@ public sealed class SettingsViewModel : ViewModelBase
     private bool _startWithWindows;
     private bool _playSoundFeedback;
     private bool _showOverlay;
+    private bool _autoCheckForUpdates;
 
     // Audio
     private List<string> _availableDevices = [];
@@ -160,6 +161,22 @@ public sealed class SettingsViewModel : ViewModelBase
             if (SetProperty(ref _showOverlay, value))
             {
                 _settingsService.Settings.ShowOverlay = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// When true, the app automatically checks GitHub for new releases.
+    /// </summary>
+    public bool AutoCheckForUpdates
+    {
+        get => _autoCheckForUpdates;
+        set
+        {
+            if (SetProperty(ref _autoCheckForUpdates, value))
+            {
+                _settingsService.Settings.AutoCheckForUpdates = value;
                 SaveSettings();
             }
         }
@@ -560,6 +577,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _startWithWindows = s.StartWithWindows;
         _playSoundFeedback = s.PlaySoundFeedback;
         _showOverlay = s.ShowOverlay;
+        _autoCheckForUpdates = s.AutoCheckForUpdates;
 
         // Audio
         RefreshDevices();

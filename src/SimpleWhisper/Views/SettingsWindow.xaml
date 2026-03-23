@@ -152,6 +152,23 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Updates Section -->
+                        <TextBlock Text="Updates" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <CheckBox Content="Automatically check for updates"
+                                          IsChecked="{Binding AutoCheckForUpdates}"/>
+                                <TextBlock Text="Checks GitHub for new releases on startup and every 4 hours"
+                                           Style="{StaticResource FieldLabel}" FontSize="11"
+                                           Margin="0,0,0,8"/>
+                                <Button x:Name="CheckForUpdatesButton"
+                                        Content="Check Now"
+                                        Style="{StaticResource DarkButton}"
+                                        Click="OnCheckForUpdatesClick"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

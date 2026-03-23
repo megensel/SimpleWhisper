@@ -199,6 +199,53 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
+    /// Checks GitHub for a new version and offers to download/install it.
+    /// </summary>
+    private async void OnCheckForUpdatesClick(object sender, RoutedEventArgs e)
+    {
+        var button = (Button)sender;
+        button.IsEnabled = false;
+        button.Content = "Checking...";
+
+        try
+        {
+            var updateInfo = await App.UpdateService.CheckForUpdateAsync();
+            if (updateInfo is not null)
+            {
+                var result = MessageBox.Show(
+                    $"Version {updateInfo.NewVersion.Major}.{updateInfo.NewVersion.Minor}.{updateInfo.NewVersion.Build} is available!\n\n" +
+                    $"Current version: {updateInfo.CurrentVersion.Major}.{updateInfo.CurrentVersion.Minor}.{updateInfo.CurrentVersion.Build}\n\n" +
+                    "Would you like to download and install it now?",
+                    "Update Available",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    button.Content = "Downloading...";
+                    var installerPath = await App.UpdateService.DownloadUpdateAsync(updateInfo);
+                    UpdateService.LaunchInstallerAndExit(installerPath);
+                }
+            }
+            else
+            {
+                MessageBox.Show("You're running the latest version!", "No Updates",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to check for updates:\n{ex.Message}", "Update Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            button.IsEnabled = true;
+            button.Content = "Check Now";
+        }
+    }
+
+    /// <summary>
     /// Saves text replacements after a cell edit completes.
     /// </summary>
     private void OnReplacementCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)

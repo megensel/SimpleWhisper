@@ -28,6 +28,11 @@ public partial class App : Application
     /// </summary>
     public static TrayManager Tray { get; private set; } = null!;
 
+    /// <summary>
+    /// Auto-update service. Checks GitHub for new releases. Initialized during <see cref="OnStartup"/>.
+    /// </summary>
+    public static UpdateService UpdateService { get; private set; } = null!;
+
     // ──────────────────────────────────────────────────────────────────
     //  Private service instances
     // ──────────────────────────────────────────────────────────────────
@@ -153,13 +158,21 @@ public partial class App : Application
         Tray = new TrayManager(initialListeningState: true);
         Tray.ListeningToggled += OnListeningToggled;
 
-        // 9. Listen for settings changes to reconfigure services at runtime
+        // 9. Set up auto-update service
+        UpdateService = new UpdateService(Settings);
+        UpdateService.UpdateAvailable += OnUpdateAvailable;
+        if (Settings.Settings.AutoCheckForUpdates)
+        {
+            UpdateService.StartPeriodicCheck();
+        }
+
+        // 10. Listen for settings changes to reconfigure services at runtime
         Settings.SettingsChanged += OnSettingsChanged;
 
-        // 10. Start listening immediately (hotkey hooks active)
+        // 11. Start listening immediately (hotkey hooks active)
         _inputTriggerService.Start();
 
-        // 11. Startup validation — warn user about missing configuration
+        // 12. Startup validation — warn user about missing configuration
         ValidateStartupConfiguration();
 
         AppLogger.Log("Application started. Listening for trigger...");
@@ -167,6 +180,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        UpdateService?.Dispose();
         _inputTriggerService?.Dispose();
         _audioCaptureService?.Dispose();
         _transcriptionManager?.Dispose();
@@ -692,7 +706,26 @@ public partial class App : Application
         _inputTriggerService?.UpdateTrigger(settings.Trigger);
         _inputTriggerService?.UpdateMode(settings.RecordingMode);
 
+        // Reconfigure update checker
+        if (settings.AutoCheckForUpdates)
+            UpdateService?.StartPeriodicCheck();
+        else
+            UpdateService?.StopPeriodicCheck();
+
         AppLogger.Log("Settings changed — services reconfigured.");
+    }
+
+    private void OnUpdateAvailable(object? sender, Models.UpdateInfo info)
+    {
+        AppLogger.Log($"Update available: v{info.NewVersion} (current: v{info.CurrentVersion})");
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            Tray?.ShowBalloonTip(
+                "Update Available",
+                $"SimpleWhisper v{info.NewVersion.Major}.{info.NewVersion.Minor}.{info.NewVersion.Build} is available.\nRight-click tray icon → Check for Updates to install.",
+                H.NotifyIcon.Core.NotificationIcon.Info);
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────

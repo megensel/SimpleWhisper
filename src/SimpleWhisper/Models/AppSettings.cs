@@ -236,4 +236,16 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("emojiInsertionEnabled")]
     public bool EmojiInsertionEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true, the app checks GitHub for new releases on startup and periodically.
+    /// </summary>
+    [JsonPropertyName("autoCheckForUpdates")]
+    public bool AutoCheckForUpdates { get; set; } = true;
+
+    /// <summary>
+    /// UTC timestamp of the last successful update check. Used to throttle API calls.
+    /// </summary>
+    [JsonPropertyName("lastUpdateCheck")]
+    public DateTime? LastUpdateCheck { get; set; }
 }

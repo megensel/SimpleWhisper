@@ -73,6 +73,9 @@ public sealed class TrayManager : IDisposable
         var settingsItem = new MenuItem { Header = "Settings" };
         settingsItem.Click += OnSettingsClick;
 
+        var checkForUpdatesItem = new MenuItem { Header = "Check for Updates" };
+        checkForUpdatesItem.Click += OnCheckForUpdatesClick;
+
         var aboutItem = new MenuItem { Header = "About" };
         aboutItem.Click += OnAboutClick;
 
@@ -87,6 +90,7 @@ public sealed class TrayManager : IDisposable
                 new Separator(),
                 _toggleListeningItem,
                 new Separator(),
+                checkForUpdatesItem,
                 aboutItem,
                 quitItem
             }
@@ -161,6 +165,39 @@ public sealed class TrayManager : IDisposable
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         ShowSettingsWindow();
+    }
+
+    private async void OnCheckForUpdatesClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var updateInfo = await App.UpdateService.CheckForUpdateAsync();
+            if (updateInfo is null)
+            {
+                ShowBalloonTip("SimpleWhisper", "You're running the latest version!", H.NotifyIcon.Core.NotificationIcon.Info);
+            }
+            else
+            {
+                var result = MessageBox.Show(
+                    $"SimpleWhisper v{updateInfo.NewVersion.Major}.{updateInfo.NewVersion.Minor}.{updateInfo.NewVersion.Build} is available!\n\n" +
+                    $"Current version: {updateInfo.CurrentVersion.Major}.{updateInfo.CurrentVersion.Minor}.{updateInfo.CurrentVersion.Build}\n\n" +
+                    "Would you like to download and install it now?",
+                    "Update Available",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    ShowBalloonTip("SimpleWhisper", "Downloading update...", H.NotifyIcon.Core.NotificationIcon.Info);
+                    var installerPath = await App.UpdateService.DownloadUpdateAsync(updateInfo);
+                    UpdateService.LaunchInstallerAndExit(installerPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowBalloonTip("Update Error", $"Failed to check for updates: {ex.Message}", H.NotifyIcon.Core.NotificationIcon.Error);
+        }
     }
 
     private void OnAboutClick(object sender, RoutedEventArgs e)
