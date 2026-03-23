@@ -19,6 +19,9 @@ public sealed class SettingsViewModel : ViewModelBase
     //  Backing fields
     // ──────────────────────────────────────────────────────────────────
 
+    private System.Windows.Threading.DispatcherTimer? _saveDebounceTimer;
+    private static readonly TimeSpan SaveDebounceInterval = TimeSpan.FromMilliseconds(300);
+
     // General
     private string _triggerDisplayName = string.Empty;
     private bool _isRecordingHoldMode;
@@ -31,6 +34,9 @@ public sealed class SettingsViewModel : ViewModelBase
     private List<string> _availableDevices = [];
     private int _selectedDeviceIndex;
     private string _selectedDeviceName = string.Empty;
+    private bool _reduceOutputVolumeWhileRecording;
+    private bool _muteOutputWhileRecording;
+    private int _outputVolumeReductionPercent;
 
     // Transcription
     private bool _isCloudEngine;
@@ -200,6 +206,55 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         get => _selectedDeviceName;
         private set => SetProperty(ref _selectedDeviceName, value);
+    }
+
+    /// <summary>
+    /// When true, system output volume is reduced while recording.
+    /// </summary>
+    public bool ReduceOutputVolumeWhileRecording
+    {
+        get => _reduceOutputVolumeWhileRecording;
+        set
+        {
+            if (SetProperty(ref _reduceOutputVolumeWhileRecording, value))
+            {
+                _settingsService.Settings.ReduceOutputVolumeWhileRecording = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// When true, system output is fully muted while recording.
+    /// </summary>
+    public bool MuteOutputWhileRecording
+    {
+        get => _muteOutputWhileRecording;
+        set
+        {
+            if (SetProperty(ref _muteOutputWhileRecording, value))
+            {
+                _settingsService.Settings.MuteOutputWhileRecording = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Percentage (0-100) to reduce system output volume while recording.
+    /// </summary>
+    public int OutputVolumeReductionPercent
+    {
+        get => _outputVolumeReductionPercent;
+        set
+        {
+            value = Math.Clamp(value, 0, 100);
+            if (SetProperty(ref _outputVolumeReductionPercent, value))
+            {
+                _settingsService.Settings.OutputVolumeReductionPercent = value;
+                SaveSettings();
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -508,6 +563,9 @@ public sealed class SettingsViewModel : ViewModelBase
 
         // Audio
         RefreshDevices();
+        _reduceOutputVolumeWhileRecording = s.ReduceOutputVolumeWhileRecording;
+        _muteOutputWhileRecording = s.MuteOutputWhileRecording;
+        _outputVolumeReductionPercent = s.OutputVolumeReductionPercent;
 
         // Transcription
         _isCloudEngine = s.Engine == TranscriptionEngine.Cloud;
@@ -583,14 +641,28 @@ public sealed class SettingsViewModel : ViewModelBase
 
     private void SaveSettings()
     {
-        try
+        if (_saveDebounceTimer is null)
         {
-            _settingsService.Save();
+            _saveDebounceTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = SaveDebounceInterval
+            };
+            _saveDebounceTimer.Tick += (_, _) =>
+            {
+                _saveDebounceTimer.Stop();
+                try
+                {
+                    _settingsService.Save();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Log($"[Settings] Failed to save: {ex.Message}");
+                }
+            };
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[Settings] Failed to save: {ex.Message}");
-        }
+
+        _saveDebounceTimer.Stop();
+        _saveDebounceTimer.Start();
     }
 
     /// <summary>

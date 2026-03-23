@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.Win32;
+using SimpleWhisper.Helpers;
 
 namespace SimpleWhisper.Services;
 
@@ -42,7 +43,7 @@ public static class StartupService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[StartupService] Registry error: {ex.Message}");
+            AppLogger.Log($"[StartupService] Registry error: {ex.Message}");
         }
     }
 

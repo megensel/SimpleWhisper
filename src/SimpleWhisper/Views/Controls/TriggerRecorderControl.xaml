@@ -11,52 +11,6 @@
         KeyDown="OnWindowKeyDown"
         MouseDown="OnWindowMouseDown">
 
-    <Window.Resources>
-        <SolidColorBrush x:Key="PanelBg" Color="#FF313244"/>
-        <SolidColorBrush x:Key="SurfaceBg" Color="#FF45475A"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF89B4FA"/>
-        <SolidColorBrush x:Key="TextPrimary" Color="#FFCDD6F4"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#FFA6ADC8"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#FF585B70"/>
-
-        <Style x:Key="DarkButton" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource SurfaceBg}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#FF585B70"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#FF89B4FA"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource DarkButton}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-            <Setter Property="Foreground" Value="#FF1E1E2E"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-    </Window.Resources>
-
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

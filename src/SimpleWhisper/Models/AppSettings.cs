@@ -104,10 +104,21 @@ public class AppSettings
     public TranscriptionEngine Engine { get; set; } = TranscriptionEngine.Cloud;
 
     /// <summary>
-    /// OpenAI API key for cloud transcription. Required when <see cref="Engine"/> is <see cref="TranscriptionEngine.Cloud"/>.
+    /// DPAPI-encrypted API key stored as Base64. This is the serialized form.
     /// </summary>
-    [JsonPropertyName("openAIApiKey")]
-    public string OpenAIApiKey { get; set; } = string.Empty;
+    [JsonPropertyName("openAIApiKeyProtected")]
+    public string EncryptedOpenAIApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Plaintext API key for runtime use. Decrypted from DPAPI on read, encrypted on write.
+    /// Not serialized to JSON.
+    /// </summary>
+    [JsonIgnore]
+    public string OpenAIApiKey
+    {
+        get => Helpers.ApiKeyProtection.Unprotect(EncryptedOpenAIApiKey);
+        set => EncryptedOpenAIApiKey = Helpers.ApiKeyProtection.Protect(value);
+    }
 
     /// <summary>
     /// Whisper model size for local transcription: tiny, base, small, medium, or large.
@@ -163,6 +174,29 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("playSoundFeedback")]
     public bool PlaySoundFeedback { get; set; } = true;
+
+    /// <summary>
+    /// When true, the system output volume is reduced while recording to prevent
+    /// playback audio from being picked up by the microphone.
+    /// </summary>
+    [JsonPropertyName("reduceOutputVolumeWhileRecording")]
+    public bool ReduceOutputVolumeWhileRecording { get; set; }
+
+    /// <summary>
+    /// When true, the system output is fully muted while recording instead of
+    /// reduced by a percentage. Only applies when <see cref="ReduceOutputVolumeWhileRecording"/> is true.
+    /// </summary>
+    [JsonPropertyName("muteOutputWhileRecording")]
+    public bool MuteOutputWhileRecording { get; set; }
+
+    /// <summary>
+    /// Percentage (0-100) to reduce the system output volume while recording.
+    /// A value of 80 means the volume is reduced to 20% of its original level.
+    /// Only applies when <see cref="ReduceOutputVolumeWhileRecording"/> is true
+    /// and <see cref="MuteOutputWhileRecording"/> is false.
+    /// </summary>
+    [JsonPropertyName("outputVolumeReductionPercent")]
+    public int OutputVolumeReductionPercent { get; set; } = 80;
 
     /// <summary>
     /// Show a floating overlay indicating recording state and transcription progress.

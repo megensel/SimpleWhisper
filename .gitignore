@@ -46,4 +46,7 @@ Desktop.ini
 *.env
 
 ## Claude
-.claude/plans/
+.claude/
+
+## Installer output
+installer/output/

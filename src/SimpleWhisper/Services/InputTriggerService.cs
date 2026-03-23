@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using H.Hooks;
+using SimpleWhisper.Helpers;
 using SimpleWhisper.Models;
 using HKey = H.Hooks.Key;
 
@@ -436,7 +436,7 @@ public sealed class InputTriggerService : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[InputTriggerService] TriggerActivated handler threw: {ex}");
+            AppLogger.Log($"[InputTriggerService] TriggerActivated handler threw: {ex}");
         }
     }
 
@@ -448,7 +448,7 @@ public sealed class InputTriggerService : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[InputTriggerService] TriggerDeactivated handler threw: {ex}");
+            AppLogger.Log($"[InputTriggerService] TriggerDeactivated handler threw: {ex}");
         }
     }
 
@@ -458,7 +458,7 @@ public sealed class InputTriggerService : IDisposable
 
     private static void OnHookException(object? sender, Exception e)
     {
-        Debug.WriteLine($"[InputTriggerService] Hook exception: {e}");
+        AppLogger.Log($"[InputTriggerService] Hook exception: {e}");
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -483,7 +483,7 @@ public sealed class InputTriggerService : IDisposable
             _keyboardHook.ExceptionOccurred -= OnHookException;
 
             try { _keyboardHook.Dispose(); }
-            catch (Exception ex) { Debug.WriteLine($"[InputTriggerService] Keyboard hook dispose error: {ex}"); }
+            catch (Exception ex) { AppLogger.Log($"[InputTriggerService] Keyboard hook dispose error: {ex}"); }
 
             _keyboardHook = null;
         }
@@ -495,7 +495,7 @@ public sealed class InputTriggerService : IDisposable
             _mouseHook.ExceptionOccurred -= OnHookException;
 
             try { _mouseHook.Dispose(); }
-            catch (Exception ex) { Debug.WriteLine($"[InputTriggerService] Mouse hook dispose error: {ex}"); }
+            catch (Exception ex) { AppLogger.Log($"[InputTriggerService] Mouse hook dispose error: {ex}"); }
 
             _mouseHook = null;
         }

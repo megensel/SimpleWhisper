@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using OpenAI;
 using OpenAI.Audio;
+using SimpleWhisper.Helpers;
 using SimpleWhisper.Models;
 
 namespace SimpleWhisper.Services;
@@ -130,7 +131,7 @@ public sealed class CloudTranscriptionService : ITranscriptionService
         catch (ClientResultException ex)
         {
             stopwatch.Stop();
-            Debug.WriteLine($"OpenAI API error: {ex.Status} - {ex.Message}");
+            AppLogger.Log($"OpenAI API error: {ex.Status} - {ex.Message}");
             return TranscriptionResult.Failure(
                 $"OpenAI API error (HTTP {ex.Status}): {ex.Message}",
                 stopwatch.Elapsed);
@@ -138,7 +139,7 @@ public sealed class CloudTranscriptionService : ITranscriptionService
         catch (HttpRequestException ex)
         {
             stopwatch.Stop();
-            Debug.WriteLine($"Network error during transcription: {ex.Message}");
+            AppLogger.Log($"Network error during transcription: {ex.Message}");
             return TranscriptionResult.Failure(
                 $"Network error: {ex.Message}",
                 stopwatch.Elapsed);
@@ -146,7 +147,7 @@ public sealed class CloudTranscriptionService : ITranscriptionService
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Debug.WriteLine($"Unexpected error during transcription: {ex}");
+            AppLogger.Log($"Unexpected error during transcription: {ex}");
             return TranscriptionResult.Failure(
                 $"Unexpected error: {ex.Message}",
                 stopwatch.Elapsed);

@@ -83,7 +83,7 @@ public sealed class ClipboardHelper
     /// Must be called on an STA thread.
     /// If the clipboard is locked, retries up to <see cref="MaxRetries"/> times.
     /// </summary>
-    public void Restore()
+    public async Task RestoreAsync()
     {
         if (!_hasSavedState)
         {
@@ -91,14 +91,14 @@ public sealed class ClipboardHelper
             return;
         }
 
-        RestoreClipboardContents();
+        await RestoreClipboardContentsAsync();
     }
 
     /// <summary>
     /// Restores the previously saved clipboard contents with retry logic for locked clipboards.
     /// Tries up to <see cref="MaxRetries"/> times with a short delay between attempts.
     /// </summary>
-    private void RestoreClipboardContents()
+    private async Task RestoreClipboardContentsAsync()
     {
         try
         {
@@ -145,7 +145,7 @@ public sealed class ClipboardHelper
                 catch (ExternalException) when (attempt < MaxRetries)
                 {
                     AppLogger.Log($"Clipboard restore attempt {attempt}/{MaxRetries} failed (locked). Retrying in {RetryDelayMs}ms...");
-                    Thread.Sleep(RetryDelayMs);
+                    await Task.Delay(RetryDelayMs);
                 }
             }
 

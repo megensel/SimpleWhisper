@@ -89,7 +89,7 @@
         <Border x:Name="MainBar"
                 Margin="8,4,8,8"
                 CornerRadius="8"
-                Background="#CC1E1E1E"
+                Background="{StaticResource OverlayBackgroundBrush}"
                 MinWidth="400"
                 Height="40"
                 Padding="12,0">
@@ -179,7 +179,7 @@
                 <TextBlock Grid.Column="1"
                            Text="{Binding StatusText}"
                            VerticalAlignment="Center"
-                           FontFamily="Segoe UI"
+                           FontFamily="{StaticResource DefaultFontFamily}"
                            FontSize="13"
                            FontWeight="Medium"
                            Foreground="White"
@@ -219,7 +219,7 @@
                     <TextBlock Text="{Binding TranscribedText}"
                                MaxWidth="300"
                                TextTrimming="CharacterEllipsis"
-                               FontFamily="Segoe UI"
+                               FontFamily="{StaticResource DefaultFontFamily}"
                                FontSize="11"
                                Foreground="#CCFFFFFF"
                                VerticalAlignment="Center">

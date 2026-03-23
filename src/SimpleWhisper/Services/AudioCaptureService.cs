@@ -1,5 +1,6 @@
 using System.IO;
 using NAudio.Wave;
+using SimpleWhisper.Helpers;
 
 namespace SimpleWhisper.Services;
 
@@ -203,7 +204,7 @@ public sealed class AudioCaptureService : IDisposable
     {
         if (e.Exception is not null)
         {
-            System.Diagnostics.Debug.WriteLine(
+            AppLogger.Log(
                 $"Recording stopped due to error: {e.Exception.Message}");
         }
     }
