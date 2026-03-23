@@ -40,6 +40,14 @@
     <SolidColorBrush x:Key="DoneBrush"       Color="{StaticResource DoneColor}" />
     <SolidColorBrush x:Key="ErrorBrush"      Color="{StaticResource ErrorColor}" />
 
+    <!-- Catppuccin Mocha accent palette (used by Settings and controls) -->
+    <SolidColorBrush x:Key="PanelBg" Color="#FF313244"/>
+    <SolidColorBrush x:Key="SurfaceBg" Color="#FF45475A"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#FF89B4FA"/>
+    <SolidColorBrush x:Key="TextPrimary" Color="#FFCDD6F4"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#FFA6ADC8"/>
+    <SolidColorBrush x:Key="CatppuccinBorder" Color="#FF585B70"/>
+
     <!-- Semi-transparent overlay background -->
     <SolidColorBrush x:Key="OverlayBackgroundBrush" Color="#CC1E1E1E" />
 
@@ -516,6 +524,106 @@
         <Setter Property="FontSize"   Value="{StaticResource DefaultFontSize}" />
         <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Accent-colored button for primary actions
+         ══════════════════════════════════════════════════════════════ -->
+
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource DarkButton}">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="#FF1E1E2E"/>
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Slider style
+         ══════════════════════════════════════════════════════════════ -->
+
+    <Style x:Key="SliderRepeatButtonLeft" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="{StaticResource AccentBrush}" CornerRadius="2" Height="4"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SliderRepeatButtonRight" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="{StaticResource SurfaceBg}" CornerRadius="2" Height="4"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SliderThumbStyle" TargetType="Thumb">
+        <Setter Property="Width" Value="16"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Ellipse x:Name="thumbEllipse"
+                             Fill="{StaticResource AccentBrush}"
+                             Width="16" Height="16"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="thumbEllipse" Property="Fill" Value="#FFA6C8FF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DarkSlider" TargetType="Slider">
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center">
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge"
+                                              Style="{StaticResource SliderRepeatButtonLeft}"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource SliderThumbStyle}"/>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge"
+                                              Style="{StaticResource SliderRepeatButtonRight}"/>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Slider" BasedOn="{StaticResource DarkSlider}"/>
+
+    <!-- Section header text style -->
+    <Style x:Key="SectionHeader" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Margin" Value="0,12,0,6"/>
+    </Style>
+
+    <!-- Field label text style -->
+    <Style x:Key="FieldLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
     </Style>
 
 </ResourceDictionary>

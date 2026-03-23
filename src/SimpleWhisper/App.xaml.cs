@@ -36,12 +36,13 @@ public partial class App : Application
     private AudioCaptureService? _audioCaptureService;
     private TranscriptionManager? _transcriptionManager;
     private TextInsertionService? _textInsertionService;
+    private OutputVolumeService? _outputVolumeService;
     private OverlayWindow? _overlayWindow;
 
     /// <summary>
     /// Guard to prevent concurrent recording pipeline executions.
     /// </summary>
-    private volatile bool _isProcessing;
+    private int _isProcessing; // 0 = idle, 1 = processing (use Interlocked for atomic access)
 
     /// <summary>
     /// Cancellation source for the real-time transcription loop that runs during recording.
@@ -76,7 +77,7 @@ public partial class App : Application
     /// <summary>
     /// RMS threshold below which audio is considered silence (mic muted/disconnected).
     /// </summary>
-    private const float SilenceThreshold = 0.005f;
+    private const float SilenceThreshold = (float)AudioConstants.SilenceRmsThreshold;
 
     /// <summary>
     /// How long to wait (in seconds) after recording starts before checking for silence.
@@ -131,6 +132,7 @@ public partial class App : Application
         _audioCaptureService = new AudioCaptureService();
         _transcriptionManager = new TranscriptionManager(Settings);
         _textInsertionService = new TextInsertionService();
+        _outputVolumeService = new OutputVolumeService();
 
         // 5. Create the overlay window
         _overlayWindow = new OverlayWindow();
@@ -167,7 +169,11 @@ public partial class App : Application
     {
         _inputTriggerService?.Dispose();
         _audioCaptureService?.Dispose();
+        _transcriptionManager?.Dispose();
         _textInsertionService?.Dispose();
+        _outputVolumeService?.Dispose();
+        _overlayWindow?.Close();
+        _streamingCts?.Dispose();
         Tray?.Dispose();
         SingleInstanceHelper.Release();
         base.OnExit(e);
@@ -185,7 +191,7 @@ public partial class App : Application
     {
         AppLogger.Log(">>> Trigger ACTIVATED (key/mouse pressed)");
 
-        if (_isProcessing || _audioCaptureService is null || _overlayWindow is null)
+        if (_isProcessing == 1 || _audioCaptureService is null || _overlayWindow is null)
             return;
 
         try
@@ -212,6 +218,14 @@ public partial class App : Application
 
             AppLogger.Log("Recording started.");
 
+            // Reduce system output volume if enabled
+            if (Settings.Settings.ReduceOutputVolumeWhileRecording)
+            {
+                _outputVolumeService?.ReduceVolume(
+                    Settings.Settings.MuteOutputWhileRecording,
+                    Settings.Settings.OutputVolumeReductionPercent);
+            }
+
             // Start a one-shot timer to check for silence after a few seconds.
             // If the mic is muted, peak audio level will still be near-zero by then.
             _mutedWarningShown = false;
@@ -235,16 +249,17 @@ public partial class App : Application
     {
         AppLogger.Log(">>> Trigger DEACTIVATED (key/mouse released)");
 
+        // Restore system output volume immediately (don't wait for transcription)
+        _outputVolumeService?.RestoreVolume();
+
         // Stop the silence-check timer — we'll do a final check in HandleDeactivationAsync.
         StopSilenceCheckTimer();
 
         if (_audioCaptureService is null || !_audioCaptureService.IsRecording)
             return;
 
-        if (_isProcessing)
+        if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) != 0)
             return;
-
-        _isProcessing = true;
 
         // Determine if we were running in real-time streaming mode.
         bool wasStreaming = _streamingCts is not null;
@@ -256,7 +271,40 @@ public partial class App : Application
         }
 
         // The rest involves async work (waiting for streaming loop, transcribing the tail).
-        _ = HandleDeactivationAsync(wasStreaming);
+        _ = HandleDeactivationAsync(wasStreaming).ContinueWith(
+            t => AppLogger.Log("HandleDeactivationAsync faulted", t.Exception!.InnerException ?? t.Exception),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    /// <summary>
+    /// Shared pipeline tail: process text, insert via clipboard, update UI.
+    /// Returns the processed text, or null if empty/whitespace.
+    /// </summary>
+    private async Task<string?> ProcessAndInsertTextAsync(string rawText)
+    {
+        string text = TextProcessingService.Process(rawText, Settings.Settings);
+        AppLogger.Log($"Processed text: \"{text}\"");
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            await Dispatcher.BeginInvoke(() =>
+            {
+                _overlayWindow?.ViewModel.SetIdle();
+                Tray?.SetState(TrayState.Idle);
+            });
+            return null;
+        }
+
+        await _textInsertionService!.InsertTextAsync(text);
+        AppLogger.Log("Text inserted successfully.");
+
+        await Dispatcher.BeginInvoke(() =>
+        {
+            _overlayWindow?.ViewModel.SetDone(text);
+            Tray?.SetState(TrayState.Idle);
+        });
+
+        return text;
     }
 
     /// <summary>
@@ -286,34 +334,11 @@ public partial class App : Application
                 return;
             }
 
-            string text = result.Text;
-            AppLogger.Log($"Raw transcription: \"{text}\"");
+            string rawText = result.Text;
+            AppLogger.Log($"Raw transcription: \"{rawText}\"");
 
-            // Step 2: Text processing (punctuation, replacements, emoji)
-            text = TextProcessingService.Process(text, Settings.Settings);
-            AppLogger.Log($"Processed text: \"{text}\"");
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                await Dispatcher.BeginInvoke(() =>
-                {
-                    _overlayWindow?.ViewModel.SetIdle();
-                    Tray?.SetState(TrayState.Idle);
-                });
-                return;
-            }
-
-            // Step 3: Insert text via clipboard paste
-            await _textInsertionService!.InsertTextAsync(text);
-
-            AppLogger.Log("Text inserted successfully.");
-
-            // Step 4: Show success in overlay
-            await Dispatcher.BeginInvoke(() =>
-            {
-                _overlayWindow?.ViewModel.SetDone(text);
-                Tray?.SetState(TrayState.Idle);
-            });
+            // Step 2-4: Process text, insert via clipboard, update UI.
+            await ProcessAndInsertTextAsync(rawText);
         }
         catch (Exception ex)
         {
@@ -326,7 +351,7 @@ public partial class App : Application
         }
         finally
         {
-            _isProcessing = false;
+            Interlocked.Exchange(ref _isProcessing, 0);
         }
     }
 
@@ -367,7 +392,7 @@ public partial class App : Application
             if (wavData.Length < MinimumWavBytes)
             {
                 AppLogger.Log($"Audio too short ({wavData.Length} bytes < {MinimumWavBytes} minimum). Skipping transcription.");
-                _isProcessing = false;
+                Interlocked.Exchange(ref _isProcessing, 0);
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetIdle();
@@ -380,7 +405,7 @@ public partial class App : Application
             if (_audioCaptureService.PeakAudioLevel < SilenceThreshold)
             {
                 AppLogger.Log($"Recording appears silent (peak level: {_audioCaptureService.PeakAudioLevel:F4}). Mic may be muted.");
-                _isProcessing = false;
+                Interlocked.Exchange(ref _isProcessing, 0);
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetError("No audio detected \u2014 is your mic muted?");
@@ -419,7 +444,7 @@ public partial class App : Application
                 _overlayWindow?.ViewModel.SetError($"Error: {ex.Message}");
                 Tray?.SetState(TrayState.Idle);
             });
-            _isProcessing = false;
+            Interlocked.Exchange(ref _isProcessing, 0);
         }
     }
 
@@ -518,44 +543,11 @@ public partial class App : Application
                 }
             }
 
-            string text = _accumulatedStreamingText.Trim();
-            AppLogger.Log($"Full streaming transcription: \"{text}\"");
+            string rawText = _accumulatedStreamingText.Trim();
+            AppLogger.Log($"Full streaming transcription: \"{rawText}\"");
 
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                await Dispatcher.BeginInvoke(() =>
-                {
-                    _overlayWindow?.ViewModel.SetIdle();
-                    Tray?.SetState(TrayState.Idle);
-                });
-                return;
-            }
-
-            // Text processing (punctuation, replacements, emoji)
-            text = TextProcessingService.Process(text, Settings.Settings);
-            AppLogger.Log($"Processed text: \"{text}\"");
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                await Dispatcher.BeginInvoke(() =>
-                {
-                    _overlayWindow?.ViewModel.SetIdle();
-                    Tray?.SetState(TrayState.Idle);
-                });
-                return;
-            }
-
-            // Insert text via clipboard paste
-            await _textInsertionService!.InsertTextAsync(text);
-
-            AppLogger.Log("Streaming text inserted successfully.");
-
-            // Show success in overlay
-            await Dispatcher.BeginInvoke(() =>
-            {
-                _overlayWindow?.ViewModel.SetDone(text);
-                Tray?.SetState(TrayState.Idle);
-            });
+            // Process text, insert via clipboard, update UI.
+            await ProcessAndInsertTextAsync(rawText);
         }
         catch (Exception ex)
         {
@@ -568,7 +560,7 @@ public partial class App : Application
         }
         finally
         {
-            _isProcessing = false;
+            Interlocked.Exchange(ref _isProcessing, 0);
         }
     }
 

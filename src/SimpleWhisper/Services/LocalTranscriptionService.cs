@@ -57,7 +57,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
     /// RMS threshold below which a window is considered silence.
     /// Conservative value to avoid trimming actual speech.
     /// </summary>
-    private const double SilenceRmsThreshold = 0.005;
+    private const double SilenceRmsThreshold = AudioConstants.SilenceRmsThreshold;
 
     /// <summary>
     /// Safety margin in samples to preserve on each side when trimming silence.
@@ -68,6 +68,11 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
     #endregion
 
     #region Fields
+
+    private static readonly HttpClient SharedHttpClient = new()
+    {
+        Timeout = TimeSpan.FromHours(2)
+    };
 
     private readonly object _processorLock = new();
     private readonly SemaphoreSlim _transcriptionSemaphore = new(1, 1);
@@ -362,10 +367,7 @@ public sealed class LocalTranscriptionService : ITranscriptionService, IDisposab
 
         AppLogger.Log($"Downloading Whisper model from: {downloadUrl}");
 
-        using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromHours(2); // Large models can take a long time.
-
-        using var response = await httpClient
+        using var response = await SharedHttpClient
             .GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
 

@@ -258,7 +258,11 @@ public sealed class TrayManager : IDisposable
     /// </summary>
     private static Icon IconFromData(byte[] data)
     {
-        return new Icon(new MemoryStream(data));
+        using var ms = new MemoryStream(data);
+        var original = new Icon(ms);
+        var clone = (Icon)original.Clone();
+        original.Dispose();
+        return clone;
     }
 
     // ──────────────────────────────────────────────────────────────────

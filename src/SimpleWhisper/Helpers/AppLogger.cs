@@ -45,9 +45,11 @@ public static class AppLogger
                 File.AppendAllText(_logPath, line + Environment.NewLine);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Logging should never crash the app
+            // Logging must never crash the app. Write to Trace (not Debug) for Release-build
+            // visibility, and avoid calling AppLogger again to prevent recursion.
+            System.Diagnostics.Trace.WriteLine($"[AppLogger] Failed to write log: {ex.Message}");
         }
     }
 

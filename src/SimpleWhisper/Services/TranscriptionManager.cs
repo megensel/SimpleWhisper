@@ -7,7 +7,7 @@ namespace SimpleWhisper.Services;
 /// engine (cloud or local) based on the current application settings. Lazily initializes
 /// service instances and keeps them in sync with settings changes.
 /// </summary>
-public sealed class TranscriptionManager
+public sealed class TranscriptionManager : IDisposable
 {
     private readonly SettingsService _settingsService;
     private readonly object _serviceLock = new();
@@ -249,5 +249,18 @@ public sealed class TranscriptionManager
     private void OnStatusChanged(string message)
     {
         StatusChanged?.Invoke(message);
+    }
+
+    /// <summary>
+    /// Releases resources held by the cloud and local transcription services.
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_serviceLock)
+        {
+            _localService?.Dispose();
+            _localService = null;
+            _cloudService = null;
+        }
     }
 }

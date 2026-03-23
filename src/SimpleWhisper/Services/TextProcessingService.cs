@@ -246,6 +246,41 @@ public static class TextProcessingService
         @"([\w ]+?)\s+emoji\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // Pre-compiled regex patterns for spoken punctuation cleanup.
+    private static readonly Regex SpaceBeforePunctuationRegex =
+        new(@"\s+([.,!?;:)\]""'}\-])", RegexOptions.Compiled);
+
+    private static readonly Regex SpaceAfterPunctuationRegex =
+        new(@"([.,!?;:])([A-Za-z])", RegexOptions.Compiled);
+
+    private static readonly Regex SpaceAfterOpenBracketRegex =
+        new(@"([\[(""'{])\s+", RegexOptions.Compiled);
+
+    private static readonly Regex CapitalizeAfterSentenceEndRegex =
+        new(@"([.!?])\s+(\w)", RegexOptions.Compiled);
+
+    private static readonly Regex CapitalizeAfterNewlineRegex =
+        new(@"\n\s*(\w)", RegexOptions.Compiled);
+
+    // Pre-compiled regex patterns for final cleanup.
+    private static readonly Regex MultipleSpacesRegex =
+        new(@" {2,}", RegexOptions.Compiled);
+
+    private static readonly Regex TrailingWhitespaceRegex =
+        new(@"[ \t]+(?=\n|$)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Lazy-initialized dictionary of pre-compiled regex patterns for each spoken punctuation entry.
+    /// </summary>
+    private static Dictionary<string, Regex>? _spokenPunctuationPatterns;
+
+    private static Dictionary<string, Regex> SpokenPunctuationPatterns =>
+        _spokenPunctuationPatterns ??= SpokenPunctuationMap.ToDictionary(
+            entry => entry.Spoken,
+            entry => new Regex(
+                @"(?<=\s|^)" + Regex.Escape(entry.Spoken) + @"(?=\s|$)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled));
+
     #endregion
 
     #region Public API
@@ -310,12 +345,8 @@ public static class TextProcessingService
     {
         foreach (var (spoken, punctuation, isSentenceEnding) in SpokenPunctuationMap)
         {
-            // Build a pattern that matches the spoken phrase as a whole word,
-            // optionally preceded by a space. Case-insensitive.
-            // We consume the leading space (if any) so that "hello period world" becomes "hello. World".
-            string pattern = @"(?<=\s|^)" + Regex.Escape(spoken) + @"(?=\s|$)";
-
-            text = Regex.Replace(text, pattern, match =>
+            var regex = SpokenPunctuationPatterns[spoken];
+            text = regex.Replace(text, match =>
             {
                 // Determine whether there's a preceding space in the original text.
                 // The lookbehind doesn't consume it, so we check the character before the match.
@@ -325,24 +356,24 @@ public static class TextProcessingService
                 // For punctuation that attaches to the previous word (.,!?;:...),
                 // we want to remove the leading space.
                 return punctuation;
-            }, RegexOptions.IgnoreCase);
+            });
         }
 
         // Remove spaces before punctuation marks that attach to the previous word.
-        text = Regex.Replace(text, @"\s+([.,!?;:)\]""'}\-])", "$1");
+        text = SpaceBeforePunctuationRegex.Replace(text, "$1");
 
         // Add a space after punctuation if followed directly by a letter (but not after newlines).
-        text = Regex.Replace(text, @"([.,!?;:])([A-Za-z])", "$1 $2");
+        text = SpaceAfterPunctuationRegex.Replace(text, "$1 $2");
 
         // Remove space after opening brackets/quotes.
-        text = Regex.Replace(text, @"([\[(""'{])\s+", "$1");
+        text = SpaceAfterOpenBracketRegex.Replace(text, "$1");
 
         // Capitalize the first letter after sentence-ending punctuation (.!?).
-        text = Regex.Replace(text, @"([.!?])\s+(\w)", match =>
+        text = CapitalizeAfterSentenceEndRegex.Replace(text, match =>
             match.Groups[1].Value + " " + match.Groups[2].Value.ToUpperInvariant());
 
         // Capitalize the first letter after a newline.
-        text = Regex.Replace(text, @"\n\s*(\w)", match =>
+        text = CapitalizeAfterNewlineRegex.Replace(text, match =>
             "\n" + match.Groups[1].Value.ToUpperInvariant());
 
         return text;
@@ -379,7 +410,8 @@ public static class TextProcessingService
                         text.Replace(rule.Find, rule.Replace, StringComparison.OrdinalIgnoreCase),
 
                     ReplacementType.Regex =>
-                        Regex.Replace(text, rule.Find, rule.Replace),
+                        Regex.Replace(text, rule.Find, rule.Replace,
+                            RegexOptions.None, TimeSpan.FromSeconds(1)),
 
                     _ => text
                 };
@@ -389,6 +421,10 @@ public static class TextProcessingService
                 // Invalid regex pattern in user rule; skip it and log the error.
                 AppLogger.Log(
                     $"Skipping invalid regex replacement rule '{rule.Find}': {ex.Message}");
+            }
+            catch (RegexMatchTimeoutException ex)
+            {
+                AppLogger.Log($"Regex replacement rule '{rule.Find}' timed out after {ex.MatchTimeout.TotalSeconds}s. Skipping.");
             }
         }
 
@@ -436,10 +472,10 @@ public static class TextProcessingService
     private static string ApplyFinalCleanup(string text)
     {
         // Collapse multiple spaces into a single space.
-        text = Regex.Replace(text, @" {2,}", " ");
+        text = MultipleSpacesRegex.Replace(text, " ");
 
         // Remove trailing whitespace from each line.
-        text = Regex.Replace(text, @"[ \t]+(?=\n|$)", "");
+        text = TrailingWhitespaceRegex.Replace(text, "");
 
         // Trim the entire string.
         text = text.Trim();

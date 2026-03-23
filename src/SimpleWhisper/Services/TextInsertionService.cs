@@ -115,10 +115,7 @@ public sealed class TextInsertionService : IDisposable
             await Task.Delay(PasteDelayMs).ConfigureAwait(false);
 
             // Step 5: Restore the original clipboard contents on the UI thread.
-            await RunOnUIThreadAsync(() =>
-            {
-                _clipboardHelper.Restore();
-            }).ConfigureAwait(false);
+            await RunOnUIThreadAsync(() => _clipboardHelper.RestoreAsync()).ConfigureAwait(false);
 
             AppLogger.Log("InsertTextAsync completed.");
         }
@@ -137,6 +134,39 @@ public sealed class TextInsertionService : IDisposable
     #endregion
 
     #region Thread Marshaling
+
+    /// <summary>
+    /// Executes the specified async function on the WPF application dispatcher (UI/STA thread).
+    /// If already on the UI thread, the function is invoked directly.
+    /// </summary>
+    /// <param name="func">The async function to execute on the UI thread.</param>
+    /// <returns>A task that completes when the async function has finished executing.</returns>
+    private static async Task RunOnUIThreadAsync(Func<Task> func)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+
+        if (dispatcher is null)
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                await func();
+                return;
+            }
+
+            throw new InvalidOperationException(
+                "Cannot access the clipboard: no WPF dispatcher is available and " +
+                "the current thread is not an STA thread.");
+        }
+
+        if (dispatcher.CheckAccess())
+        {
+            await func();
+        }
+        else
+        {
+            await dispatcher.InvokeAsync(func);
+        }
+    }
 
     /// <summary>
     /// Executes the specified action on the WPF application dispatcher (UI/STA thread).

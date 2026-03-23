@@ -88,7 +88,24 @@ public sealed class SettingsService
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
 
                 if (settings is not null)
+                {
+                    // Migration: if the old plaintext "openAIApiKey" field exists in the JSON
+                    // and the new encrypted field is empty, migrate the key to DPAPI encryption.
+                    if (string.IsNullOrEmpty(settings.EncryptedOpenAIApiKey))
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("openAIApiKey", out var oldKey))
+                        {
+                            string plainKey = oldKey.GetString() ?? string.Empty;
+                            if (!string.IsNullOrEmpty(plainKey))
+                            {
+                                settings.OpenAIApiKey = plainKey; // Setter encrypts via DPAPI
+                            }
+                        }
+                    }
+
                     return settings;
+                }
             }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
