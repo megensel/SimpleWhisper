@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6+: https://jrsoftware.org/isinfo.php
 
 #define AppName "SimpleWhisper"
-#define AppVersion "1.1.0"
+#define AppVersion "1.2.0"
 #define AppPublisher "SimpleWhisper"
 #define AppExeName "SimpleWhisper.exe"
 #define AppDescription "Speech-to-text anywhere with a hotkey"
