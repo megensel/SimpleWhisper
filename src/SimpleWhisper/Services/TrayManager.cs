@@ -205,11 +205,80 @@ public sealed class TrayManager : IDisposable
         var version = typeof(TrayManager).Assembly.GetName().Version;
         string versionString = version is not null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
 
-        MessageBox.Show(
-            $"{AppTitle}\nVersion {versionString}\n\nSpeech-to-text anywhere with a hotkey.",
-            $"About {AppTitle}",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        // Do NOT use MessageBox.Show here. The tray context menu is hosted in a
+        // transient popup window that is destroyed the instant the menu closes.
+        // An owner-less MessageBox is parented to that popup (via GetActiveWindow),
+        // so it is torn down with it — appearing for only a split second. Showing a
+        // normal modeless Window instead (the same pattern as the Settings window)
+        // gives the dialog its own top-level HWND that survives until the user
+        // closes it.
+
+        // If an About window is already open, just bring it to the front.
+        foreach (Window existing in Application.Current.Windows)
+        {
+            if (existing is { Tag: "AboutWindow" })
+            {
+                existing.Activate();
+                return;
+            }
+        }
+
+        // Pull the app's dark-theme brushes so this window matches the rest of the UI.
+        // Without an explicit background the window defaults to white, and the theme's
+        // implicit white TextBlock foreground would render the text invisible.
+        var backgroundBrush = (System.Windows.Media.Brush)Application.Current.FindResource("BackgroundBrush");
+        var foregroundBrush = (System.Windows.Media.Brush)Application.Current.FindResource("ForegroundBrush");
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            Width = 80,
+            Height = 28,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0),
+            IsDefault = true,
+            IsCancel = true
+        };
+
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = AppTitle,
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = foregroundBrush
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Version {versionString}",
+            Margin = new Thickness(0, 4, 0, 0),
+            Foreground = foregroundBrush
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Speech-to-text anywhere with a hotkey.",
+            Margin = new Thickness(0, 12, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = foregroundBrush
+        });
+        panel.Children.Add(okButton);
+
+        var aboutWindow = new Window
+        {
+            Title = $"About {AppTitle}",
+            Tag = "AboutWindow",
+            Content = panel,
+            Background = backgroundBrush,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            ShowInTaskbar = false,
+            MinWidth = 320
+        };
+        okButton.Click += (_, _) => aboutWindow.Close();
+
+        aboutWindow.Show();
+        aboutWindow.Activate();
     }
 
     private static void OnQuitClick(object sender, RoutedEventArgs e)
