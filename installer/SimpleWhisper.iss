@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6+: https://jrsoftware.org/isinfo.php
 
 #define AppName "SimpleWhisper"
-#define AppVersion "1.3.1"
+#define AppVersion "1.3.2"
 #define AppPublisher "SimpleWhisper"
 #define AppExeName "SimpleWhisper.exe"
 #define AppDescription "Speech-to-text anywhere with a hotkey"
@@ -41,7 +41,14 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "{#AppDesc
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon; Comment: "{#AppDescription}"
 
 [Run]
+; Interactive installs: offer a "Launch SimpleWhisper" checkbox on the finished page.
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+; Silent installs (the in-app auto-updater runs Setup with /VERYSILENT): relaunch the
+; app automatically. The app shuts itself down before launching Setup, so Inno's Restart
+; Manager never closes it and therefore never restarts it — without this it would stay
+; closed after an update. Check: WizardSilent ensures this only fires for silent installs,
+; avoiding a double launch alongside the postinstall checkbox above.
+Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: WizardSilent
 
 [Registry]
 ; Clean up the startup registry entry on uninstall.
