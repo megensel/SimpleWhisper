@@ -378,6 +378,11 @@ public partial class App : Application
 
             if (!result.IsSuccess)
             {
+                // The transcription services swallow OperationCanceledException into a
+                // failure result — surface cancellation so it shows "Cancelled"/timeout UI
+                // instead of a generic error and balloon.
+                cancellationToken.ThrowIfCancellationRequested();
+
                 AppLogger.Log($"Transcription failed: {result.ErrorMessage}");
 
                 // Show a friendlier error in the overlay (full details go to log file).
@@ -615,6 +620,14 @@ public partial class App : Application
 
             _outputVolumeService?.RestoreVolume();
 
+            // Clean up streaming-session state (normally done in HandleDeactivationAsync,
+            // which never runs for a cancelled recording). Prevents a stale _streamingCts
+            // from routing the NEXT session into the streaming finalize path with stale text.
+            _streamingCts?.Dispose();
+            _streamingCts = null;
+            _streamingTask = null;
+            _accumulatedStreamingText = string.Empty;
+
             Dispatcher.BeginInvoke(() =>
             {
                 StopSilenceCheckTimer();
@@ -741,6 +754,10 @@ public partial class App : Application
 
             string rawText = _accumulatedStreamingText.Trim();
             AppLogger.Log($"Full streaming transcription: \"{rawText}\"");
+
+            // The transcription services swallow OperationCanceledException into a failure
+            // result, so re-check the token here — a cancelled session must never paste.
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Process text, insert via clipboard, update UI.
             // Deliberately NOT cancellable — once transcription succeeded, the paste completes.
