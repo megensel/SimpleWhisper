@@ -600,7 +600,8 @@ public partial class App : Application
         try { cts.Cancel(); }
         catch (ObjectDisposedException) { /* Session ended between the null check and Cancel. */ }
 
-        _streamingCts?.Cancel();
+        try { _streamingCts?.Cancel(); }
+        catch (ObjectDisposedException) { /* Streaming loop shut down between the read and Cancel. */ }
 
         // Clear the trigger service's internal state so (in toggle mode) the next
         // press starts a new recording instead of acting as "stop".
