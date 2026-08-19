@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Cancel a recording or in-flight transcription at any time with **Esc** or the new **✕ button** on the overlay.
+- Automatic 90-second timeout so "Processing…" can never hang forever.
+
+### Fixed
+- An accidental recording could leave the app stuck on "Processing…" indefinitely, ignoring all further trigger presses.
+
 ## [1.3.2] - 2026-06-08
 
 ### Fixed

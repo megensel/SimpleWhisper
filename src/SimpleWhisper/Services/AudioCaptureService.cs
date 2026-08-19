@@ -47,6 +47,14 @@ public sealed class AudioCaptureService : IDisposable
     private readonly object _bufferLock = new();
 
     /// <summary>
+    /// Synchronizes recording state transitions (start/stop/dispose) so concurrent
+    /// callers (e.g. a cancel on the Esc-hook thread racing a trigger release on a
+    /// thread-pool thread) cannot both pass the IsRecording check and finalize the
+    /// same recording twice.
+    /// </summary>
+    private readonly object _stateLock = new();
+
+    /// <summary>
     /// Byte offset into the memory stream marking the end of the last extracted chunk.
     /// Reset to <see cref="WavHeaderSize"/> when a new recording starts.
     /// </summary>
@@ -108,32 +116,35 @@ public sealed class AudioCaptureService : IDisposable
     /// <exception cref="InvalidOperationException">Thrown if recording is already in progress.</exception>
     public void StartRecording(int deviceIndex)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        if (IsRecording)
-            throw new InvalidOperationException("Recording is already in progress.");
-
-        _memoryStream = new MemoryStream();
-
-        var waveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels);
-        _waveFileWriter = new WaveFileWriter(_memoryStream, waveFormat);
-
-        // The WAV header occupies the first 44 bytes; PCM data starts after that.
-        _lastChunkByteOffset = WavHeaderSize;
-        _peakAudioLevel = 0f;
-
-        _waveIn = new WaveInEvent
+        lock (_stateLock)
         {
-            DeviceNumber = deviceIndex,
-            WaveFormat = waveFormat,
-            BufferMilliseconds = 50
-        };
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _waveIn.DataAvailable += OnDataAvailable;
-        _waveIn.RecordingStopped += OnRecordingStopped;
+            if (IsRecording)
+                throw new InvalidOperationException("Recording is already in progress.");
 
-        _waveIn.StartRecording();
-        IsRecording = true;
+            _memoryStream = new MemoryStream();
+
+            var waveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels);
+            _waveFileWriter = new WaveFileWriter(_memoryStream, waveFormat);
+
+            // The WAV header occupies the first 44 bytes; PCM data starts after that.
+            _lastChunkByteOffset = WavHeaderSize;
+            _peakAudioLevel = 0f;
+
+            _waveIn = new WaveInEvent
+            {
+                DeviceNumber = deviceIndex,
+                WaveFormat = waveFormat,
+                BufferMilliseconds = 50
+            };
+
+            _waveIn.DataAvailable += OnDataAvailable;
+            _waveIn.RecordingStopped += OnRecordingStopped;
+
+            _waveIn.StartRecording();
+            IsRecording = true;
+        }
     }
 
     /// <summary>
@@ -145,13 +156,16 @@ public sealed class AudioCaptureService : IDisposable
     /// </returns>
     public byte[] StopRecording()
     {
-        if (!IsRecording || _waveIn is null)
-            return [];
+        lock (_stateLock)
+        {
+            if (!IsRecording || _waveIn is null)
+                return [];
 
-        _waveIn.StopRecording();
-        IsRecording = false;
+            _waveIn.StopRecording();
+            IsRecording = false;
 
-        return FinalizeRecording();
+            return FinalizeRecording();
+        }
     }
 
     /// <summary>
@@ -159,18 +173,21 @@ public sealed class AudioCaptureService : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-
-        if (IsRecording)
+        lock (_stateLock)
         {
-            _waveIn?.StopRecording();
-            IsRecording = false;
-        }
+            if (_disposed)
+                return;
 
-        CleanupResources();
+            _disposed = true;
+
+            if (IsRecording)
+            {
+                _waveIn?.StopRecording();
+                IsRecording = false;
+            }
+
+            CleanupResources();
+        }
     }
 
     /// <summary>

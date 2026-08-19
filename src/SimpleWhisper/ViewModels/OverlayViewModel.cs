@@ -1,4 +1,6 @@
+using System.Windows.Input;
 using System.Windows.Threading;
+using SimpleWhisper.Helpers;
 using SimpleWhisper.Models;
 
 namespace SimpleWhisper.ViewModels;
@@ -36,6 +38,7 @@ public class OverlayViewModel : ViewModelBase
             Interval = TimeSpan.FromSeconds(2)
         };
         _autoHideTimer.Tick += OnAutoHideTimerTick;
+        CancelCommand = new RelayCommand(() => CancelRequested?.Invoke());
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -99,6 +102,21 @@ public class OverlayViewModel : ViewModelBase
     }
 
     // ──────────────────────────────────────────────────────────────────
+    //  Cancellation
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Command bound to the overlay's ✕ button. Raises <see cref="CancelRequested"/>.
+    /// </summary>
+    public ICommand CancelCommand { get; }
+
+    /// <summary>
+    /// Raised when the user clicks the overlay's ✕ button to cancel the current
+    /// recording or transcription. The application layer subscribes and cancels the pipeline.
+    /// </summary>
+    public event Action? CancelRequested;
+
+    // ──────────────────────────────────────────────────────────────────
     //  State transition methods
     // ──────────────────────────────────────────────────────────────────
 
@@ -159,6 +177,22 @@ public class OverlayViewModel : ViewModelBase
         AnimationOpacity = 1.0;
         IsVisible = true;
         StartAutoHideTimer(TimeSpan.FromSeconds(3));
+    }
+
+    /// <summary>
+    /// Transitions the overlay to the Cancelled state. The overlay auto-hides after 2 seconds.
+    /// </summary>
+    /// <param name="message">The message to display (e.g. "Cancelled").</param>
+    public void SetCancelled(string message)
+    {
+        StopAutoHideTimer();
+        State = OverlayState.Cancelled;
+        StatusText = message;
+        TranscribedText = string.Empty;
+        AudioLevel = 0.0;
+        AnimationOpacity = 1.0;
+        IsVisible = true;
+        StartAutoHideTimer(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>

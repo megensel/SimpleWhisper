@@ -89,8 +89,8 @@ public static partial class Win32Helper
 
     /// <summary>
     /// Configures a window to be click-through, preventing it from receiving any mouse input.
-    /// Also applies the tool-window and layered extended styles so the window does not appear
-    /// in the taskbar or Alt+Tab switcher.
+    /// Also applies the tool-window, layered, and no-activate extended styles so the window
+    /// does not appear in the taskbar or Alt+Tab switcher and never steals focus.
     /// </summary>
     /// <param name="hwnd">The native window handle to modify.</param>
     public static void MakeWindowClickThrough(IntPtr hwnd)
@@ -98,7 +98,7 @@ public static partial class Win32Helper
         int currentStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
 
         SetWindowLong(hwnd, GWL_EXSTYLE,
-            currentStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_LAYERED);
+            currentStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE);
     }
 
     /// <summary>
@@ -110,5 +110,25 @@ public static partial class Win32Helper
     {
         var hwnd = GetWindowHandle(window);
         MakeWindowClickThrough(hwnd);
+    }
+
+    /// <summary>
+    /// Enables or disables the click-through (<see cref="WS_EX_TRANSPARENT"/>) style on a window
+    /// at runtime, leaving the tool-window, layered, and no-activate styles in place. Used by the
+    /// overlay to accept clicks on its cancel button only while a session is active.
+    /// </summary>
+    /// <param name="window">The WPF window to modify. No-op if its handle is not yet created.</param>
+    /// <param name="enabled"><c>true</c> to make the window click-through; <c>false</c> to let it receive mouse input.</param>
+    public static void SetClickThrough(Window window, bool enabled)
+    {
+        var hwnd = GetWindowHandle(window);
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        int style = GetWindowLong(hwnd, GWL_EXSTYLE);
+        style = enabled ? style | WS_EX_TRANSPARENT : style & ~WS_EX_TRANSPARENT;
+
+        SetWindowLong(hwnd, GWL_EXSTYLE,
+            style | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE);
     }
 }
