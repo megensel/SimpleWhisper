@@ -61,6 +61,31 @@ public partial class App : Application
     private Task? _streamingTask;
 
     /// <summary>
+    /// Why the current session's cancellation token fired. Set to <see cref="CancelReason.Manual"/>
+    /// before a user-initiated cancel; if the token fires while this is still
+    /// <see cref="CancelReason.None"/>, the 90-second processing timeout caused it.
+    /// </summary>
+    private enum CancelReason { None, Manual, Timeout }
+
+    /// <summary>
+    /// Cancellation source covering the whole recording→transcription session.
+    /// Created in <see cref="OnTriggerActivated"/>; cancelled by Esc, the overlay ✕ button,
+    /// or the processing timeout; disposed in <see cref="EndSession"/>.
+    /// </summary>
+    private CancellationTokenSource? _pipelineCts;
+
+    /// <summary>
+    /// See <see cref="CancelReason"/>. Reset to None at the start of each session.
+    /// </summary>
+    private volatile CancelReason _cancelReason;
+
+    /// <summary>
+    /// Safety-net timeout for the Processing state. If transcription hasn't finished
+    /// this many seconds after processing starts, the session is cancelled.
+    /// </summary>
+    private const int ProcessingTimeoutSeconds = 90;
+
+    /// <summary>
     /// Text accumulated from real-time transcription chunks during the current recording.
     /// Reset at the start of each recording session.
     /// </summary>
@@ -142,6 +167,7 @@ public partial class App : Application
         // 5. Create the overlay window
         _overlayWindow = new OverlayWindow();
         _overlayWindow.Show();
+        _overlayWindow.ViewModel.CancelRequested += RequestCancel;
 
         // 6. Set up input trigger (hotkey/mouse hook)
         _inputTriggerService = new InputTriggerService(
@@ -150,6 +176,7 @@ public partial class App : Application
 
         _inputTriggerService.TriggerActivated += OnTriggerActivated;
         _inputTriggerService.TriggerDeactivated += OnTriggerDeactivated;
+        _inputTriggerService.CancelRequested += RequestCancel;
 
         // 7. Wire audio level to overlay
         _audioCaptureService.AudioLevelChanged += OnAudioLevelChanged;
@@ -213,6 +240,12 @@ public partial class App : Application
             int deviceIndex = Settings.Settings.MicrophoneDeviceIndex;
             _audioCaptureService.StartRecording(deviceIndex);
 
+            // Begin a cancellable session covering recording + transcription.
+            _cancelReason = CancelReason.None;
+            _pipelineCts?.Dispose();
+            _pipelineCts = new CancellationTokenSource();
+            _inputTriggerService!.IsSessionActive = true;
+
             // Update UI state
             Dispatcher.BeginInvoke(() =>
             {
@@ -252,6 +285,7 @@ public partial class App : Application
             {
                 _overlayWindow?.ViewModel.SetError($"Mic error: {ex.Message}");
             });
+            EndSession();
         }
     }
 
@@ -460,6 +494,77 @@ public partial class App : Application
             });
             Interlocked.Exchange(ref _isProcessing, 0);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Session cancellation (Esc, overlay ✕, processing timeout)
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Cancels the active session. Called from the Esc hook (thread-pool thread) and the
+    /// overlay ✕ button (UI thread). If recording is in progress the audio is discarded;
+    /// if processing is in progress the cancellation token aborts the transcription and
+    /// the pipeline's cancellation handler finishes the UI reset.
+    /// </summary>
+    private void RequestCancel()
+    {
+        var cts = _pipelineCts;
+        if (cts is null)
+            return;
+
+        AppLogger.Log(">>> Cancel requested (Esc or overlay button).");
+        _cancelReason = CancelReason.Manual;
+
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { /* Session ended between the null check and Cancel. */ }
+
+        _streamingCts?.Cancel();
+
+        // Clear the trigger service's internal state so (in toggle mode) the next
+        // press starts a new recording instead of acting as "stop".
+        _inputTriggerService?.ResetActivation();
+
+        // If we're still recording (cancel happened before trigger deactivation),
+        // stop the mic, discard the audio, and reset the UI here — no pipeline is
+        // running yet to do it for us.
+        if (_audioCaptureService is not null && _audioCaptureService.IsRecording)
+        {
+            try
+            {
+                _ = _audioCaptureService.StopRecording(); // Discard audio.
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log("Error stopping recording during cancel", ex);
+            }
+
+            _outputVolumeService?.RestoreVolume();
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                StopSilenceCheckTimer();
+                _overlayWindow?.ViewModel.SetCancelled("Cancelled");
+                Tray?.SetState(TrayState.Idle);
+            });
+
+            EndSession();
+        }
+        // Else: processing is in flight. The cancelled token surfaces as an
+        // OperationCanceledException in the pipeline, whose handler resets the UI
+        // and calls EndSession.
+    }
+
+    /// <summary>
+    /// Ends the current session: clears the trigger service's session flag and disposes
+    /// the session cancellation source. Safe to call multiple times.
+    /// </summary>
+    private void EndSession()
+    {
+        if (_inputTriggerService is not null)
+            _inputTriggerService.IsSessionActive = false;
+
+        _pipelineCts?.Dispose();
+        _pipelineCts = null;
     }
 
     // ──────────────────────────────────────────────────────────────────
