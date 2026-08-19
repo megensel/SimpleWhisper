@@ -251,8 +251,7 @@ public partial class App : Application
             // Begin a cancellable session covering recording + transcription.
             _cancelReason = CancelReason.None;
             Interlocked.Exchange(ref _cancelRequested, 0);
-            _pipelineCts?.Dispose();
-            _pipelineCts = new CancellationTokenSource();
+            Interlocked.Exchange(ref _pipelineCts, new CancellationTokenSource())?.Dispose();
             _inputTriggerService!.IsSessionActive = true;
 
             // Update UI state
@@ -294,7 +293,7 @@ public partial class App : Application
             {
                 _overlayWindow?.ViewModel.SetError($"Mic error: {ex.Message}");
             });
-            EndSession();
+            EndSession(_pipelineCts);
         }
     }
 
@@ -328,8 +327,9 @@ public partial class App : Application
         }
 
         // The rest involves async work (waiting for streaming loop, transcribing the tail).
-        CancellationToken sessionToken = _pipelineCts?.Token ?? CancellationToken.None;
-        _ = HandleDeactivationAsync(wasStreaming, sessionToken).ContinueWith(
+        CancellationTokenSource? sessionCts = _pipelineCts;
+        CancellationToken sessionToken = sessionCts?.Token ?? CancellationToken.None;
+        _ = HandleDeactivationAsync(wasStreaming, sessionCts, sessionToken).ContinueWith(
             t => AppLogger.Log("HandleDeactivationAsync faulted", t.Exception!.InnerException ?? t.Exception),
             TaskContinuationOptions.OnlyOnFaulted);
     }
@@ -369,7 +369,8 @@ public partial class App : Application
     /// Runs the full transcription pipeline: transcribe → text process → insert.
     /// Executes on a background thread to keep the UI responsive.
     /// </summary>
-    private async Task RunTranscriptionPipelineAsync(byte[] wavData, CancellationToken cancellationToken)
+    private async Task RunTranscriptionPipelineAsync(
+        byte[] wavData, CancellationTokenSource? sessionCts, CancellationToken cancellationToken)
     {
         try
         {
@@ -395,7 +396,7 @@ public partial class App : Application
                         H.NotifyIcon.Core.NotificationIcon.Error);
                 });
                 Interlocked.Exchange(ref _isProcessing, 0);
-                EndSession();
+                EndSession(sessionCts);
                 return;
             }
 
@@ -406,11 +407,11 @@ public partial class App : Application
             // Deliberately NOT cancellable — once transcription succeeded, the paste completes.
             await ProcessAndInsertTextAsync(rawText);
             Interlocked.Exchange(ref _isProcessing, 0);
-            EndSession();
+            EndSession(sessionCts);
         }
         catch (OperationCanceledException)
         {
-            HandlePipelineCancelled();
+            HandlePipelineCancelled(sessionCts);
         }
         catch (Exception ex)
         {
@@ -421,7 +422,7 @@ public partial class App : Application
                 Tray?.SetState(TrayState.Idle);
             });
             Interlocked.Exchange(ref _isProcessing, 0);
-            EndSession();
+            EndSession(sessionCts);
         }
     }
 
@@ -431,7 +432,8 @@ public partial class App : Application
     /// The <paramref name="sessionToken"/> cancels transcription work when the user
     /// cancels (Esc / overlay ✕) or the processing timeout fires.
     /// </summary>
-    private async Task HandleDeactivationAsync(bool wasStreaming, CancellationToken sessionToken)
+    private async Task HandleDeactivationAsync(
+        bool wasStreaming, CancellationTokenSource? sessionCts, CancellationToken sessionToken)
     {
         try
         {
@@ -463,7 +465,7 @@ public partial class App : Application
             {
                 AppLogger.Log("Session cancelled before processing started. Discarding audio.");
                 Interlocked.Exchange(ref _isProcessing, 0);
-                EndSession();
+                EndSession(sessionCts);
                 return;
             }
 
@@ -476,7 +478,7 @@ public partial class App : Application
             {
                 AppLogger.Log($"Audio too short ({wavData.Length} bytes < {MinimumWavBytes} minimum). Skipping transcription.");
                 Interlocked.Exchange(ref _isProcessing, 0);
-                EndSession();
+                EndSession(sessionCts);
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetIdle();
@@ -490,7 +492,7 @@ public partial class App : Application
             {
                 AppLogger.Log($"Recording appears silent (peak level: {_audioCaptureService.PeakAudioLevel:F4}). Mic may be muted.");
                 Interlocked.Exchange(ref _isProcessing, 0);
-                EndSession();
+                EndSession(sessionCts);
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetError("No audio detected \u2014 is your mic muted?");
@@ -511,7 +513,7 @@ public partial class App : Application
 
             try
             {
-                _pipelineCts?.CancelAfter(TimeSpan.FromSeconds(ProcessingTimeoutSeconds));
+                sessionCts?.CancelAfter(TimeSpan.FromSeconds(ProcessingTimeoutSeconds));
             }
             catch (ObjectDisposedException) { /* Session already ended. */ }
 
@@ -519,17 +521,17 @@ public partial class App : Application
             {
                 // Streaming path: transcribe only the remaining un-chunked audio tail,
                 // then combine with the text accumulated during recording.
-                await RunStreamingFinalizePipelineAsync(wavData, sessionToken);
+                await RunStreamingFinalizePipelineAsync(wavData, sessionCts, sessionToken);
             }
             else
             {
                 // Standard path: transcribe the full recording at once.
-                await RunTranscriptionPipelineAsync(wavData, sessionToken);
+                await RunTranscriptionPipelineAsync(wavData, sessionCts, sessionToken);
             }
         }
         catch (OperationCanceledException)
         {
-            HandlePipelineCancelled();
+            HandlePipelineCancelled(sessionCts);
         }
         catch (Exception ex)
         {
@@ -540,7 +542,7 @@ public partial class App : Application
                 Tray?.SetState(TrayState.Idle);
             });
             Interlocked.Exchange(ref _isProcessing, 0);
-            EndSession();
+            EndSession(sessionCts);
         }
     }
 
@@ -548,7 +550,7 @@ public partial class App : Application
     /// Shared handler for a cancelled pipeline: resets state and shows either
     /// "Cancelled" (manual) or a timeout error on the overlay.
     /// </summary>
-    private void HandlePipelineCancelled()
+    private void HandlePipelineCancelled(CancellationTokenSource? sessionCts)
     {
         bool manual = _cancelReason == CancelReason.Manual;
         AppLogger.Log(manual
@@ -556,7 +558,7 @@ public partial class App : Application
             : $"Pipeline cancelled by {ProcessingTimeoutSeconds}s processing timeout.");
 
         Interlocked.Exchange(ref _isProcessing, 0);
-        EndSession();
+        EndSession(sessionCts);
 
         Dispatcher.BeginInvoke(() =>
         {
@@ -635,7 +637,7 @@ public partial class App : Application
                 Tray?.SetState(TrayState.Idle);
             });
 
-            EndSession();
+            EndSession(cts);
         }
         // Else: processing is in flight. The cancelled token surfaces as an
         // OperationCanceledException in the pipeline, whose handler resets the UI
@@ -643,16 +645,20 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Ends the current session: clears the trigger service's session flag and disposes
-    /// the session cancellation source. Safe to call multiple times.
+    /// Ends the session owned by <paramref name="cts"/>: clears the trigger service's
+    /// session flag and disposes the session cancellation source. Safe to call multiple
+    /// times. If a newer session has already replaced <see cref="_pipelineCts"/>, this
+    /// call is stale and does nothing — it must not tear down the new session.
     /// </summary>
-    private void EndSession()
+    private void EndSession(CancellationTokenSource? cts)
     {
+        if (cts is null || Interlocked.CompareExchange(ref _pipelineCts, null, cts) != cts)
+            return;
+
         if (_inputTriggerService is not null)
             _inputTriggerService.IsSessionActive = false;
 
-        var cts = Interlocked.Exchange(ref _pipelineCts, null);
-        cts?.Dispose();
+        cts.Dispose();
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -724,7 +730,8 @@ public partial class App : Application
     /// then processes and pastes. Cancellation surfaces as
     /// <see cref="OperationCanceledException"/> and is handled by <see cref="HandlePipelineCancelled"/>.
     /// </summary>
-    private async Task RunStreamingFinalizePipelineAsync(byte[] fullWavData, CancellationToken cancellationToken)
+    private async Task RunStreamingFinalizePipelineAsync(
+        byte[] fullWavData, CancellationTokenSource? sessionCts, CancellationToken cancellationToken)
     {
         try
         {
@@ -763,11 +770,11 @@ public partial class App : Application
             // Deliberately NOT cancellable — once transcription succeeded, the paste completes.
             await ProcessAndInsertTextAsync(rawText);
             Interlocked.Exchange(ref _isProcessing, 0);
-            EndSession();
+            EndSession(sessionCts);
         }
         catch (OperationCanceledException)
         {
-            HandlePipelineCancelled();
+            HandlePipelineCancelled(sessionCts);
         }
         catch (Exception ex)
         {
@@ -778,7 +785,7 @@ public partial class App : Application
                 Tray?.SetState(TrayState.Idle);
             });
             Interlocked.Exchange(ref _isProcessing, 0);
-            EndSession();
+            EndSession(sessionCts);
         }
     }
 
