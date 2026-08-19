@@ -34,9 +34,14 @@ transcription leaves the app stuck on "Processing…" forever with no way out.
    The app informs the service of session state via a new `IsSessionActive` boolean
    property (set true on trigger activation, false when the pipeline ends or is cancelled).
 2. **Overlay ✕ button** — a small close button on the floating overlay, visible in the
-   Recording and Processing states only. Click → same cancel path. The overlay window
-   must accept mouse input for this button (it is currently click-through/no-activate;
-   the button area must be hit-testable without stealing focus from the user's target app).
+   Recording and Processing states only. Click → same cancel path. The overlay window is
+   currently click-through window-wide (`Win32Helper.MakeWindowClickThrough` sets
+   `WS_EX_TRANSPARENT`, which cannot be bypassed per-element). Solution: `Win32Helper`
+   gains a method to clear/restore that style, and `OverlayWindow` disables click-through
+   while the state is Recording or Processing (when the ✕ is visible) and re-enables it
+   otherwise. `WS_EX_NOACTIVATE` (not currently applied) is added to the window styles so
+   that once click-through is off, clicking the ✕ never steals focus from the user's
+   target app.
 3. **90-second timeout** — `CancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(90))`
    armed when the UI enters the Processing state. Generous enough for long local-engine
    transcriptions.
