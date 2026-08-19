@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move the `[Unreleased]` entries into a new version section and paste that
 > section into the GitHub Release body.
 
-## [Unreleased]
+## [1.4.0] - 2026-08-19
 
 ### Added
 - Cancel a recording or in-flight transcription at any time with **Esc** or the new **✕ button** on the overlay.
