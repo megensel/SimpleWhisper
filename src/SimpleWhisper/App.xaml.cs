@@ -222,6 +222,7 @@ public partial class App : Application
         _outputVolumeService?.Dispose();
         _overlayWindow?.Close();
         _streamingCts?.Dispose();
+        _pipelineCts?.Dispose();
         Tray?.Dispose();
         SingleInstanceHelper.Release();
         base.OnExit(e);
@@ -327,7 +328,8 @@ public partial class App : Application
         }
 
         // The rest involves async work (waiting for streaming loop, transcribing the tail).
-        _ = HandleDeactivationAsync(wasStreaming).ContinueWith(
+        CancellationToken sessionToken = _pipelineCts?.Token ?? CancellationToken.None;
+        _ = HandleDeactivationAsync(wasStreaming, sessionToken).ContinueWith(
             t => AppLogger.Log("HandleDeactivationAsync faulted", t.Exception!.InnerException ?? t.Exception),
             TaskContinuationOptions.OnlyOnFaulted);
     }
@@ -367,12 +369,12 @@ public partial class App : Application
     /// Runs the full transcription pipeline: transcribe → text process → insert.
     /// Executes on a background thread to keep the UI responsive.
     /// </summary>
-    private async Task RunTranscriptionPipelineAsync(byte[] wavData)
+    private async Task RunTranscriptionPipelineAsync(byte[] wavData, CancellationToken cancellationToken)
     {
         try
         {
-            // Step 1: Transcribe
-            var result = await _transcriptionManager!.TranscribeAsync(wavData);
+            // Step 1: Transcribe (aborts the underlying HTTP request / local run on cancel).
+            var result = await _transcriptionManager!.TranscribeAsync(wavData, cancellationToken);
 
             if (!result.IsSuccess)
             {
@@ -387,6 +389,8 @@ public partial class App : Application
                     Tray?.ShowBalloonTip("Transcription Failed", shortError,
                         H.NotifyIcon.Core.NotificationIcon.Error);
                 });
+                Interlocked.Exchange(ref _isProcessing, 0);
+                EndSession();
                 return;
             }
 
@@ -394,7 +398,14 @@ public partial class App : Application
             AppLogger.Log($"Raw transcription: \"{rawText}\"");
 
             // Step 2-4: Process text, insert via clipboard, update UI.
+            // Deliberately NOT cancellable — once transcription succeeded, the paste completes.
             await ProcessAndInsertTextAsync(rawText);
+            Interlocked.Exchange(ref _isProcessing, 0);
+            EndSession();
+        }
+        catch (OperationCanceledException)
+        {
+            HandlePipelineCancelled();
         }
         catch (Exception ex)
         {
@@ -404,18 +415,18 @@ public partial class App : Application
                 _overlayWindow?.ViewModel.SetError($"Error: {ex.Message}");
                 Tray?.SetState(TrayState.Idle);
             });
-        }
-        finally
-        {
             Interlocked.Exchange(ref _isProcessing, 0);
+            EndSession();
         }
     }
 
     /// <summary>
     /// Async continuation of <see cref="OnTriggerDeactivated"/>. Waits for the streaming
     /// loop to finish (if active), stops recording, and runs the appropriate pipeline.
+    /// The <paramref name="sessionToken"/> cancels transcription work when the user
+    /// cancels (Esc / overlay ✕) or the processing timeout fires.
     /// </summary>
-    private async Task HandleDeactivationAsync(bool wasStreaming)
+    private async Task HandleDeactivationAsync(bool wasStreaming, CancellationToken sessionToken)
     {
         try
         {
@@ -440,8 +451,19 @@ public partial class App : Application
                 }
             }
 
+            // If the user cancelled while we were shutting down the streaming loop,
+            // the cancel path already stopped the mic and reset the UI \u2014 just bail.
+            // (Also guards the race where Esc and trigger release arrive together.)
+            if (sessionToken.IsCancellationRequested || !_audioCaptureService!.IsRecording)
+            {
+                AppLogger.Log("Session cancelled before processing started. Discarding audio.");
+                Interlocked.Exchange(ref _isProcessing, 0);
+                EndSession();
+                return;
+            }
+
             // Stop recording and get complete WAV data.
-            byte[] wavData = _audioCaptureService!.StopRecording();
+            byte[] wavData = _audioCaptureService.StopRecording();
 
             AppLogger.Log($"Recording stopped. WAV size: {wavData.Length} bytes.");
 
@@ -449,6 +471,7 @@ public partial class App : Application
             {
                 AppLogger.Log($"Audio too short ({wavData.Length} bytes < {MinimumWavBytes} minimum). Skipping transcription.");
                 Interlocked.Exchange(ref _isProcessing, 0);
+                EndSession();
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetIdle();
@@ -462,6 +485,7 @@ public partial class App : Application
             {
                 AppLogger.Log($"Recording appears silent (peak level: {_audioCaptureService.PeakAudioLevel:F4}). Mic may be muted.");
                 Interlocked.Exchange(ref _isProcessing, 0);
+                EndSession();
                 await Dispatcher.BeginInvoke(() =>
                 {
                     _overlayWindow?.ViewModel.SetError("No audio detected \u2014 is your mic muted?");
@@ -473,24 +497,34 @@ public partial class App : Application
                 return;
             }
 
-            // Update UI to processing state.
+            // Update UI to processing state and arm the safety-net timeout.
             await Dispatcher.BeginInvoke(() =>
             {
                 _overlayWindow?.ViewModel.SetProcessing();
                 Tray?.SetState(TrayState.Processing);
             });
 
+            try
+            {
+                _pipelineCts?.CancelAfter(TimeSpan.FromSeconds(ProcessingTimeoutSeconds));
+            }
+            catch (ObjectDisposedException) { /* Session already ended. */ }
+
             if (wasStreaming)
             {
                 // Streaming path: transcribe only the remaining un-chunked audio tail,
                 // then combine with the text accumulated during recording.
-                await RunStreamingFinalizePipelineAsync(wavData);
+                await RunStreamingFinalizePipelineAsync(wavData, sessionToken);
             }
             else
             {
                 // Standard path: transcribe the full recording at once.
-                await RunTranscriptionPipelineAsync(wavData);
+                await RunTranscriptionPipelineAsync(wavData, sessionToken);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            HandlePipelineCancelled();
         }
         catch (Exception ex)
         {
@@ -501,7 +535,36 @@ public partial class App : Application
                 Tray?.SetState(TrayState.Idle);
             });
             Interlocked.Exchange(ref _isProcessing, 0);
+            EndSession();
         }
+    }
+
+    /// <summary>
+    /// Shared handler for a cancelled pipeline: resets state and shows either
+    /// "Cancelled" (manual) or a timeout error on the overlay.
+    /// </summary>
+    private void HandlePipelineCancelled()
+    {
+        bool manual = _cancelReason == CancelReason.Manual;
+        AppLogger.Log(manual
+            ? "Pipeline cancelled by user."
+            : $"Pipeline cancelled by {ProcessingTimeoutSeconds}s processing timeout.");
+
+        Interlocked.Exchange(ref _isProcessing, 0);
+        EndSession();
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (manual)
+            {
+                _overlayWindow?.ViewModel.SetCancelled("Cancelled");
+            }
+            else
+            {
+                _overlayWindow?.ViewModel.SetError("Timed out \u2014 try again.");
+            }
+            Tray?.SetState(TrayState.Idle);
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -645,9 +708,10 @@ public partial class App : Application
     /// <summary>
     /// Finalizes a real-time streaming session: transcribes any remaining audio that
     /// wasn't covered by the chunked loop, concatenates with accumulated text,
-    /// then processes and pastes.
+    /// then processes and pastes. Cancellation surfaces as
+    /// <see cref="OperationCanceledException"/> and is handled by <see cref="HandlePipelineCancelled"/>.
     /// </summary>
-    private async Task RunStreamingFinalizePipelineAsync(byte[] fullWavData)
+    private async Task RunStreamingFinalizePipelineAsync(byte[] fullWavData, CancellationToken cancellationToken)
     {
         try
         {
@@ -662,7 +726,8 @@ public partial class App : Application
                     ? null
                     : GetTrailingWords(_accumulatedStreamingText, 30);
 
-                var tailResult = await _transcriptionManager!.TranscribeChunkAsync(remaining, lastContext);
+                var tailResult = await _transcriptionManager!.TranscribeChunkAsync(
+                    remaining, lastContext, cancellationToken);
 
                 if (tailResult.IsSuccess && !string.IsNullOrWhiteSpace(tailResult.Text))
                 {
@@ -678,7 +743,14 @@ public partial class App : Application
             AppLogger.Log($"Full streaming transcription: \"{rawText}\"");
 
             // Process text, insert via clipboard, update UI.
+            // Deliberately NOT cancellable — once transcription succeeded, the paste completes.
             await ProcessAndInsertTextAsync(rawText);
+            Interlocked.Exchange(ref _isProcessing, 0);
+            EndSession();
+        }
+        catch (OperationCanceledException)
+        {
+            HandlePipelineCancelled();
         }
         catch (Exception ex)
         {
@@ -688,10 +760,8 @@ public partial class App : Application
                 _overlayWindow?.ViewModel.SetError($"Error: {ex.Message}");
                 Tray?.SetState(TrayState.Idle);
             });
-        }
-        finally
-        {
             Interlocked.Exchange(ref _isProcessing, 0);
+            EndSession();
         }
     }
 
