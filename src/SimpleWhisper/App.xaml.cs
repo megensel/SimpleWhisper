@@ -80,6 +80,13 @@ public partial class App : Application
     private volatile CancelReason _cancelReason;
 
     /// <summary>
+    /// Guard ensuring the cancel body in <see cref="RequestCancel"/> runs at most once
+    /// per session (Esc and the overlay ✕ can fire concurrently from different threads).
+    /// 0 = not cancelled, 1 = cancel in progress. Reset at the start of each session.
+    /// </summary>
+    private int _cancelRequested;
+
+    /// <summary>
     /// Safety-net timeout for the Processing state. If transcription hasn't finished
     /// this many seconds after processing starts, the session is cancelled.
     /// </summary>
@@ -242,6 +249,7 @@ public partial class App : Application
 
             // Begin a cancellable session covering recording + transcription.
             _cancelReason = CancelReason.None;
+            Interlocked.Exchange(ref _cancelRequested, 0);
             _pipelineCts?.Dispose();
             _pipelineCts = new CancellationTokenSource();
             _inputTriggerService!.IsSessionActive = true;
@@ -512,6 +520,10 @@ public partial class App : Application
         if (cts is null)
             return;
 
+        // Only the first concurrent caller proceeds; later callers are no-ops.
+        if (Interlocked.Exchange(ref _cancelRequested, 1) == 1)
+            return;
+
         AppLogger.Log(">>> Cancel requested (Esc or overlay button).");
         _cancelReason = CancelReason.Manual;
 
@@ -563,8 +575,8 @@ public partial class App : Application
         if (_inputTriggerService is not null)
             _inputTriggerService.IsSessionActive = false;
 
-        _pipelineCts?.Dispose();
-        _pipelineCts = null;
+        var cts = Interlocked.Exchange(ref _pipelineCts, null);
+        cts?.Dispose();
     }
 
     // ──────────────────────────────────────────────────────────────────
