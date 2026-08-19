@@ -37,6 +37,10 @@ public sealed class InputTriggerService : IDisposable
     private volatile bool _isPressed;
     private volatile bool _isActive;
 
+    // True while the application has an active recording/processing session.
+    // Set by the app layer; gates Esc-to-cancel detection.
+    private volatile bool _isSessionActive;
+
     private bool _disposed;
 
     // ── Events ───────────────────────────────────────────────────────────
@@ -52,6 +56,24 @@ public sealed class InputTriggerService : IDisposable
     /// This event fires on a thread-pool thread; consumers must marshal to the UI thread if needed.
     /// </summary>
     public event Action? TriggerDeactivated;
+
+    /// <summary>
+    /// Raised when the user presses Esc while a recording or processing session is active
+    /// (see <see cref="IsSessionActive"/>). Fires on a thread-pool thread.
+    /// The Esc key press is never suppressed and still reaches other applications.
+    /// </summary>
+    public event Action? CancelRequested;
+
+    /// <summary>
+    /// Gets or sets whether a recording/processing session is currently active.
+    /// While <c>true</c>, pressing Esc raises <see cref="CancelRequested"/>.
+    /// Set by the application layer at session start/end.
+    /// </summary>
+    public bool IsSessionActive
+    {
+        get => _isSessionActive;
+        set => _isSessionActive = value;
+    }
 
     /// <summary>
     /// Creates a new <see cref="InputTriggerService"/> with the specified trigger configuration and recording mode.
@@ -171,6 +193,18 @@ public sealed class InputTriggerService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Clears the internal pressed/active trigger state without raising events.
+    /// Called when the application cancels a session externally (e.g. Esc or the overlay ✕),
+    /// so that in toggle mode the next trigger press starts a new recording instead of
+    /// being interpreted as "stop".
+    /// </summary>
+    public void ResetActivation()
+    {
+        _isPressed = false;
+        _isActive = false;
+    }
+
     // ════════════════════════════════════════════════════════════════════
     //  Keyboard hook handlers
     // ════════════════════════════════════════════════════════════════════
@@ -178,6 +212,14 @@ public sealed class InputTriggerService : IDisposable
     private void OnKeyboardDown(object? sender, KeyboardEventArgs e)
     {
         UpdateModifierState(e.CurrentKey, pressed: true);
+
+        // Esc cancels the active session (recording or processing). Observational only —
+        // the hook never blocks the key, so Esc still works normally in other apps.
+        if (e.CurrentKey == HKey.Escape && _isSessionActive)
+        {
+            RaiseCancelRequested();
+            return;
+        }
 
         // Read current config snapshot under lock.
         InputTrigger trigger;
@@ -452,6 +494,18 @@ public sealed class InputTriggerService : IDisposable
         }
     }
 
+    private void RaiseCancelRequested()
+    {
+        try
+        {
+            CancelRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"[InputTriggerService] CancelRequested handler threw: {ex}");
+        }
+    }
+
     // ════════════════════════════════════════════════════════════════════
     //  Hook exception handler
     // ════════════════════════════════════════════════════════════════════
@@ -469,6 +523,7 @@ public sealed class InputTriggerService : IDisposable
     {
         _isPressed = false;
         _isActive = false;
+        _isSessionActive = false;
         _ctrlHeld = false;
         _altHeld = false;
         _shiftHeld = false;
