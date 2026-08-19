@@ -213,14 +213,6 @@ public sealed class InputTriggerService : IDisposable
     {
         UpdateModifierState(e.CurrentKey, pressed: true);
 
-        // Esc cancels the active session (recording or processing). Observational only —
-        // the hook never blocks the key, so Esc still works normally in other apps.
-        if (e.CurrentKey == HKey.Escape && _isSessionActive)
-        {
-            RaiseCancelRequested();
-            return;
-        }
-
         // Read current config snapshot under lock.
         InputTrigger trigger;
         RecordingMode mode;
@@ -228,6 +220,18 @@ public sealed class InputTriggerService : IDisposable
         {
             trigger = _trigger;
             mode = _mode;
+        }
+
+        // Esc cancels the active session (recording or processing). Observational only —
+        // the hook never blocks the key, so Esc still works normally in other apps.
+        // Skipped when Esc itself is the configured trigger key: it must fall through to
+        // trigger matching, otherwise the second press in toggle mode would be swallowed
+        // as a cancel and recording could never complete.
+        if (e.CurrentKey == HKey.Escape && _isSessionActive
+            && !(trigger.Type == TriggerType.Keyboard && IsMatchingKeyboardKey(HKey.Escape, trigger.Key)))
+        {
+            RaiseCancelRequested();
+            return;
         }
 
         // Only process keyboard triggers.
