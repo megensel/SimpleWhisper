@@ -153,6 +153,11 @@ public partial class OverlayWindow : Window
 
         _previousState = newState;
         RepositionWindow();
+
+        // Accept mouse input (for the ✕ cancel button) only while a session is active;
+        // stay click-through in every other state so clicks pass to windows below.
+        bool sessionActive = newState is OverlayState.Recording or OverlayState.Processing;
+        Win32Helper.SetClickThrough(this, enabled: !sessionActive);
     }
 
     private void StartAnimationsForState(OverlayState state)

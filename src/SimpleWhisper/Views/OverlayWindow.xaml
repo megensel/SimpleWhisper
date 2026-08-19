@@ -103,6 +103,8 @@
                     <ColumnDefinition Width="*" />
                     <!-- Col 3: Audio level bar / transcribed text -->
                     <ColumnDefinition Width="Auto" />
+                    <!-- Col 4: Cancel button -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- ────────────────────────────────────────────────
@@ -238,6 +240,55 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </Grid>
+
+                <!-- ────────────────────────────────────────────────
+                     Column 4: Cancel (✕) button
+                     ──────────────────────────────────────────────── -->
+                <Button Grid.Column="4"
+                        Command="{Binding CancelCommand}"
+                        Width="22" Height="22"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Cursor="Hand"
+                        Focusable="False"
+                        ToolTip="Cancel (Esc)">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="Foreground" Value="#CCFFFFFF" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="ButtonBorder"
+                                                Background="{TemplateBinding Background}"
+                                                CornerRadius="4">
+                                            <TextBlock Text="✕"
+                                                       FontSize="12"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ButtonBorder" Property="Background" Value="#33FFFFFF" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Recording}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="{x:Static models:OverlayState.Processing}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </Grid>
         </Border>
     </Grid>
