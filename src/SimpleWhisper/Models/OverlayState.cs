@@ -18,5 +18,8 @@ public enum OverlayState
     Done,
 
     /// <summary>An error occurred during recording or transcription.</summary>
-    Error
+    Error,
+
+    /// <summary>The user cancelled the recording or transcription.</summary>
+    Cancelled
 }
