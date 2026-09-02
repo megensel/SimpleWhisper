@@ -113,10 +113,18 @@ public sealed class DeepgramTranscriptionService : ITranscriptionService
                 duration: stopwatch.Elapsed,
                 confidence: confidence);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
             return TranscriptionResult.Failure("Transcription was cancelled.", stopwatch.Elapsed);
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            AppLogger.Log($"Deepgram transcription timed out after {RestTranscriptionHttp.TimeoutSeconds} seconds.");
+            return TranscriptionResult.Failure(
+                $"Request timed out after {RestTranscriptionHttp.TimeoutSeconds} seconds.",
+                stopwatch.Elapsed);
         }
         catch (HttpRequestException ex)
         {

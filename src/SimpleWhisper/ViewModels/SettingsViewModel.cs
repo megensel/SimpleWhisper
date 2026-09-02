@@ -395,6 +395,14 @@ public sealed class SettingsViewModel : ViewModelBase
     public IReadOnlyList<TranscriptionModelOption> GroqModels { get; } =
         TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Groq);
 
+    /// <summary>Display text for Gemini's single fixed model, e.g. "Model: gemini-3.5-transcribe".</summary>
+    public string GeminiModelDisplayName { get; } =
+        "Model: " + TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Gemini)[0].DisplayName;
+
+    /// <summary>Display text for Deepgram's single fixed model, e.g. "Model: nova-3".</summary>
+    public string DeepgramModelDisplayName { get; } =
+        "Model: " + TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Deepgram)[0].DisplayName;
+
     /// <summary>Selected OpenAI model id.</summary>
     public string OpenAIModel
     {
@@ -686,6 +694,8 @@ public sealed class SettingsViewModel : ViewModelBase
         _deepgramApiKey = s.DeepgramApiKey;
         _openAIModel = OpenAIModels.Any(m => m.Id == s.OpenAIModel) ? s.OpenAIModel : OpenAIModels[0].Id;
         _groqModel = GroqModels.Any(m => m.Id == s.GroqModel) ? s.GroqModel : GroqModels[0].Id;
+        _settingsService.Settings.OpenAIModel = _openAIModel;
+        _settingsService.Settings.GroqModel = _groqModel;
         _selectedLanguage = s.Language;
         _autoDetectLanguage = s.AutoDetectLanguage;
         _localModelSize = s.LocalModelSize;

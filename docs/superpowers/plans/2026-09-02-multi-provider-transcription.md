@@ -1745,6 +1745,7 @@ This needs real API keys and a microphone, so it is run by the user with the orc
 | 10 | Cancel mid-flight | On any cloud engine, press Esc during "Processing…". | Returns to idle within a second; log shows "Transcription was cancelled." |
 | 11 | Local | Select Local, record. | Unchanged behaviour, streaming preview still works. |
 | 12 | Restart persistence | Restart the app. | Engine, all four keys, and both model selections survive. |
+| 13 | Deepgram, auto-detect + vocabulary | Enable auto-detect language, keep a custom vocabulary term, record on Deepgram. | Either a transcript is returned, or a clear "Deepgram API error (HTTP 400…" message; no crash. Record which. |
 
 Any failure goes back to the owning task's implementer model with the log excerpt.
 

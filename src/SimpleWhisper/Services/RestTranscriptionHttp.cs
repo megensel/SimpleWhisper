@@ -8,10 +8,15 @@ namespace SimpleWhisper.Services;
 internal static class RestTranscriptionHttp
 {
     /// <summary>
+    /// The request timeout, in seconds, applied to <see cref="Client"/>.
+    /// </summary>
+    public const int TimeoutSeconds = 60;
+
+    /// <summary>
     /// A single long-lived <see cref="HttpClient"/> shared by REST transcription services.
     /// The 60-second timeout is a safety net; callers also pass a cancellation token.
     /// </summary>
-    public static HttpClient Client { get; } = new() { Timeout = TimeSpan.FromSeconds(60) };
+    public static HttpClient Client { get; } = new() { Timeout = TimeSpan.FromSeconds(TimeoutSeconds) };
 
     /// <summary>
     /// Splits the comma-separated vocabulary prompt built by <c>TranscriptionManager</c>

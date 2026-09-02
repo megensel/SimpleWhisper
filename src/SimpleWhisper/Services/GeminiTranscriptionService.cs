@@ -125,6 +125,12 @@ public sealed class GeminiTranscriptionService : ITranscriptionService
                     stopwatch.Elapsed);
             }
 
+            if (TryExtractFailure(json, out string failureReason))
+            {
+                AppLogger.Log($"Gemini interaction failed: {failureReason}");
+                return TranscriptionResult.Failure($"Gemini API error: {failureReason}", stopwatch.Elapsed);
+            }
+
             string text = ExtractTranscript(json);
 
             if (string.IsNullOrWhiteSpace(text))
@@ -137,10 +143,18 @@ public sealed class GeminiTranscriptionService : ITranscriptionService
                 language: language ?? string.Empty,
                 duration: stopwatch.Elapsed);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
             return TranscriptionResult.Failure("Transcription was cancelled.", stopwatch.Elapsed);
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            AppLogger.Log($"Gemini transcription timed out after {RestTranscriptionHttp.TimeoutSeconds} seconds.");
+            return TranscriptionResult.Failure(
+                $"Request timed out after {RestTranscriptionHttp.TimeoutSeconds} seconds.",
+                stopwatch.Elapsed);
         }
         catch (HttpRequestException ex)
         {
@@ -170,20 +184,32 @@ public sealed class GeminiTranscriptionService : ITranscriptionService
             return outputText.GetString() ?? string.Empty;
         }
 
-        if (root.TryGetProperty("status", out var status) &&
-            status.ValueKind == JsonValueKind.String &&
-            status.GetString() == "failed")
-        {
-            return string.Empty;
-        }
-
         if (!root.TryGetProperty("steps", out var steps) || steps.ValueKind != JsonValueKind.Array)
             return string.Empty;
 
+        // Prefer text blocks from model_output steps; fall back to any step with a content array
+        // if no model_output steps yielded text (some responses use a different step type).
+        var parts = CollectTextBlocks(steps, step =>
+            step.TryGetProperty("type", out var stepType) && stepType.GetString() == "model_output");
+
+        if (parts.Count == 0)
+        {
+            parts = CollectTextBlocks(steps, step => step.TryGetProperty("content", out _));
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Collects <c>text</c> blocks from steps that satisfy <paramref name="stepPredicate"/> and
+    /// have a <c>content</c> array.
+    /// </summary>
+    private static List<string> CollectTextBlocks(JsonElement steps, Func<JsonElement, bool> stepPredicate)
+    {
         var parts = new List<string>();
         foreach (var step in steps.EnumerateArray())
         {
-            if (!step.TryGetProperty("type", out var stepType) || stepType.GetString() != "model_output")
+            if (!stepPredicate(step))
                 continue;
 
             if (!step.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
@@ -199,7 +225,68 @@ public sealed class GeminiTranscriptionService : ITranscriptionService
             }
         }
 
-        return string.Join(" ", parts);
+        return parts;
+    }
+
+    /// <summary>
+    /// Checks whether the interaction reported <c>status: "failed"</c> and, if so, extracts a
+    /// human-readable reason from <c>error.message</c>, <c>error</c>, or <c>status_details</c>/
+    /// <c>incomplete_details</c>, falling back to a generic message.
+    /// </summary>
+    private static bool TryExtractFailure(string json, out string reason)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        if (!root.TryGetProperty("status", out var status) ||
+            status.ValueKind != JsonValueKind.String ||
+            status.GetString() != "failed")
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        if (root.TryGetProperty("error", out var error))
+        {
+            if (error.ValueKind == JsonValueKind.Object &&
+                error.TryGetProperty("message", out var message) &&
+                message.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(message.GetString()))
+            {
+                reason = message.GetString()!;
+                return true;
+            }
+
+            if (error.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(error.GetString()))
+            {
+                reason = error.GetString()!;
+                return true;
+            }
+        }
+
+        foreach (string property in new[] { "status_details", "incomplete_details" })
+        {
+            if (root.TryGetProperty(property, out var details))
+            {
+                if (details.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(details.GetString()))
+                {
+                    reason = details.GetString()!;
+                    return true;
+                }
+
+                if (details.ValueKind == JsonValueKind.Object &&
+                    details.TryGetProperty("reason", out var detailsReason) &&
+                    detailsReason.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(detailsReason.GetString()))
+                {
+                    reason = detailsReason.GetString()!;
+                    return true;
+                }
+            }
+        }
+
+        reason = "Gemini reported the interaction failed.";
+        return true;
     }
 
     /// <summary>

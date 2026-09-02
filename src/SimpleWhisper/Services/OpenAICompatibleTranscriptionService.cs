@@ -22,6 +22,7 @@ public sealed class OpenAICompatibleTranscriptionService : ITranscriptionService
     private readonly object _clientLock = new();
     private readonly Uri? _endpoint;
     private readonly string _providerDisplayName;
+    private readonly string _defaultModel;
     private string _apiKey;
     private string _model;
     private AudioClient? _audioClient;
@@ -33,10 +34,19 @@ public sealed class OpenAICompatibleTranscriptionService : ITranscriptionService
     /// <param name="model">Model id to request (e.g. "gpt-4o-mini-transcribe", "whisper-large-v3-turbo").</param>
     /// <param name="endpoint">Custom base endpoint, or <c>null</c> for api.openai.com.</param>
     /// <param name="providerDisplayName">Provider name used in <see cref="EngineName"/> (e.g. "OpenAI", "Groq").</param>
-    public OpenAICompatibleTranscriptionService(string apiKey, string model, Uri? endpoint, string providerDisplayName)
+    /// <param name="defaultModel">
+    /// Model id used when <paramref name="model"/> is blank. Defaults to "whisper-1" when not supplied.
+    /// </param>
+    public OpenAICompatibleTranscriptionService(
+        string apiKey,
+        string model,
+        Uri? endpoint,
+        string providerDisplayName,
+        string? defaultModel = null)
     {
+        _defaultModel = string.IsNullOrWhiteSpace(defaultModel) ? "whisper-1" : defaultModel;
         _apiKey = apiKey ?? string.Empty;
-        _model = string.IsNullOrWhiteSpace(model) ? "whisper-1" : model;
+        _model = string.IsNullOrWhiteSpace(model) ? _defaultModel : model;
         _endpoint = endpoint;
         _providerDisplayName = providerDisplayName;
         RebuildClients();
@@ -137,10 +147,16 @@ public sealed class OpenAICompatibleTranscriptionService : ITranscriptionService
                 language: transcription.Language ?? language ?? string.Empty,
                 duration: stopwatch.Elapsed);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
             return TranscriptionResult.Failure("Transcription was cancelled.", stopwatch.Elapsed);
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            AppLogger.Log($"{_providerDisplayName} transcription timed out.");
+            return TranscriptionResult.Failure("Request timed out.", stopwatch.Elapsed);
         }
         catch (ClientResultException ex)
         {

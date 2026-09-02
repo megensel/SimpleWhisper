@@ -125,7 +125,11 @@ public sealed class TranscriptionManager : IDisposable
             if (_openAIService is null)
             {
                 _openAIService = new OpenAICompatibleTranscriptionService(
-                    settings.OpenAIApiKey, settings.OpenAIModel, endpoint: null, providerDisplayName: "OpenAI");
+                    settings.OpenAIApiKey,
+                    settings.OpenAIModel,
+                    endpoint: null,
+                    providerDisplayName: "OpenAI",
+                    defaultModel: TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Cloud)[0].Id);
             }
             else
             {
@@ -150,7 +154,8 @@ public sealed class TranscriptionManager : IDisposable
                     settings.GroqApiKey,
                     settings.GroqModel,
                     OpenAICompatibleTranscriptionService.GroqEndpoint,
-                    providerDisplayName: "Groq");
+                    providerDisplayName: "Groq",
+                    defaultModel: TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Groq)[0].Id);
             }
             else
             {

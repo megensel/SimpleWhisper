@@ -1003,15 +1003,15 @@ public partial class App : Application
     {
         var settings = Settings.Settings;
 
-        // Check if cloud engine is selected but API key is missing
-        if (settings.Engine == TranscriptionEngine.Cloud && string.IsNullOrWhiteSpace(settings.OpenAIApiKey))
+        // Check if the selected cloud engine is missing its API key.
+        if (TryGetMissingCloudEngineKeyProvider(settings, out string providerName))
         {
-            AppLogger.Log("WARNING: Cloud engine selected but no API key configured.");
+            AppLogger.Log($"WARNING: {providerName} engine selected but no API key configured.");
 
             Dispatcher.BeginInvoke(() =>
             {
                 var result = MessageBox.Show(
-                    "SimpleWhisper is set to use the OpenAI cloud engine, but no API key is configured.\n\n" +
+                    $"SimpleWhisper is set to use the {providerName} cloud engine, but no API key is configured.\n\n" +
                     "Would you like to open Settings to add your API key?\n\n" +
                     "(You can also switch to the local Whisper engine in Settings.)",
                     "Configuration Required",
@@ -1044,5 +1044,32 @@ public partial class App : Application
         {
             AppLogger.Log($"Found {devices.Count} microphone(s). Using device {settings.MicrophoneDeviceIndex}: {(settings.MicrophoneDeviceIndex < devices.Count ? devices[settings.MicrophoneDeviceIndex].Name : "INVALID INDEX")}");
         }
+    }
+
+    /// <summary>
+    /// Determines whether the currently selected cloud transcription engine is missing its API key.
+    /// </summary>
+    /// <param name="settings">The current application settings.</param>
+    /// <param name="providerName">The display name of the provider (e.g. "OpenAI", "Gemini") when a key is missing.</param>
+    /// <returns><c>true</c> if a cloud engine is selected and its API key is blank.</returns>
+    private static bool TryGetMissingCloudEngineKeyProvider(AppSettings settings, out string providerName)
+    {
+        (string ProviderName, string ApiKey)? candidate = settings.Engine switch
+        {
+            TranscriptionEngine.Cloud => ("OpenAI", settings.OpenAIApiKey),
+            TranscriptionEngine.Gemini => ("Gemini", settings.GeminiApiKey),
+            TranscriptionEngine.Groq => ("Groq", settings.GroqApiKey),
+            TranscriptionEngine.Deepgram => ("Deepgram", settings.DeepgramApiKey),
+            _ => null
+        };
+
+        if (candidate is { } value && string.IsNullOrWhiteSpace(value.ApiKey))
+        {
+            providerName = value.ProviderName;
+            return true;
+        }
+
+        providerName = string.Empty;
+        return false;
     }
 }
