@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move the `[Unreleased]` entries into a new version section and paste that
 > section into the GitHub Release body.
 
+## [1.5.0] - 2026-09-02
+
+### Added
+- Engine picker in Settings with four cloud providers plus Local.
+- Google Gemini 3.5 Transcribe (`gemini-3.5-transcribe`) via the Gemini API.
+- Groq hosted Whisper (`whisper-large-v3-turbo`, `whisper-large-v3`).
+- Deepgram Nova-3 with key-term boosting from the custom vocabulary list.
+- OpenAI model selection: `gpt-4o-mini-transcribe` (new default), `gpt-4o-transcribe`, `whisper-1`.
+- One DPAPI-encrypted API key per provider.
+
+### Changed
+- OpenAI NuGet package upgraded from 2.9.1 to 2.13.0.
+- New installs and existing installs default to `gpt-4o-mini-transcribe` instead of `whisper-1`.
+
 ## [1.4.0] - 2026-08-19
 
 ### Added
