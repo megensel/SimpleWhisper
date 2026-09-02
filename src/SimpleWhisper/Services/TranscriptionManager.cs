@@ -12,7 +12,7 @@ public sealed class TranscriptionManager : IDisposable
     private readonly SettingsService _settingsService;
     private readonly object _serviceLock = new();
 
-    private CloudTranscriptionService? _cloudService;
+    private OpenAICompatibleTranscriptionService? _openAIService;
     private LocalTranscriptionService? _localService;
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class TranscriptionManager : IDisposable
 
         ITranscriptionService service = engine switch
         {
-            TranscriptionEngine.Cloud => GetOrCreateCloudService(settings.OpenAIApiKey),
+            TranscriptionEngine.Cloud => GetOrCreateOpenAIService(settings),
             TranscriptionEngine.Local => await GetOrCreateLocalServiceAsync(settings, language, prompt, cancellationToken),
             _ => throw new InvalidOperationException($"Unknown transcription engine: {engine}")
         };
@@ -105,24 +105,23 @@ public sealed class TranscriptionManager : IDisposable
     }
 
     /// <summary>
-    /// Gets the current cloud transcription service, or creates one lazily.
-    /// If the API key has changed since the last call, the existing service's key is updated.
+    /// Gets the OpenAI transcription service, creating it lazily and keeping its key and model in sync with settings.
     /// </summary>
-    private CloudTranscriptionService GetOrCreateCloudService(string apiKey)
+    private OpenAICompatibleTranscriptionService GetOrCreateOpenAIService(AppSettings settings)
     {
         lock (_serviceLock)
         {
-            if (_cloudService is null)
+            if (_openAIService is null)
             {
-                _cloudService = new CloudTranscriptionService(apiKey);
+                _openAIService = new OpenAICompatibleTranscriptionService(
+                    settings.OpenAIApiKey, settings.OpenAIModel, endpoint: null, providerDisplayName: "OpenAI");
             }
             else
             {
-                // Keep the service's API key in sync with current settings.
-                _cloudService.UpdateApiKey(apiKey);
+                _openAIService.UpdateConfiguration(settings.OpenAIApiKey, settings.OpenAIModel);
             }
 
-            return _cloudService;
+            return _openAIService;
         }
     }
 
@@ -260,7 +259,7 @@ public sealed class TranscriptionManager : IDisposable
         {
             _localService?.Dispose();
             _localService = null;
-            _cloudService = null;
+            _openAIService = null;
         }
     }
 }

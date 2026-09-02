@@ -10,27 +10,35 @@ using SimpleWhisper.Models;
 namespace SimpleWhisper.Services;
 
 /// <summary>
-/// Transcription service that uses the OpenAI Whisper cloud API via the official OpenAI NuGet package.
-/// Sends recorded WAV audio to the <c>whisper-1</c> model and returns the transcribed text.
+/// Transcription service for any provider that exposes the OpenAI <c>/audio/transcriptions</c>
+/// contract, using the official OpenAI NuGet package. Serves OpenAI itself (default endpoint)
+/// and Groq (custom endpoint). The model id is configurable at runtime.
 /// </summary>
-public sealed class CloudTranscriptionService : ITranscriptionService
+public sealed class OpenAICompatibleTranscriptionService : ITranscriptionService
 {
+    /// <summary>Base endpoint for Groq's OpenAI-compatible API.</summary>
+    public static readonly Uri GroqEndpoint = new("https://api.groq.com/openai/v1");
+
     private readonly object _clientLock = new();
+    private readonly Uri? _endpoint;
+    private readonly string _providerDisplayName;
     private string _apiKey;
-    private OpenAIClient? _openAIClient;
+    private string _model;
     private AudioClient? _audioClient;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CloudTranscriptionService"/> class
-    /// with the specified OpenAI API key.
+    /// Initializes a new instance of the <see cref="OpenAICompatibleTranscriptionService"/> class.
     /// </summary>
-    /// <param name="apiKey">
-    /// The OpenAI API key used to authenticate requests to the Whisper API.
-    /// Can be empty initially and updated later via <see cref="UpdateApiKey"/>.
-    /// </param>
-    public CloudTranscriptionService(string apiKey)
+    /// <param name="apiKey">Provider API key. May be empty and set later via <see cref="UpdateConfiguration"/>.</param>
+    /// <param name="model">Model id to request (e.g. "gpt-4o-mini-transcribe", "whisper-large-v3-turbo").</param>
+    /// <param name="endpoint">Custom base endpoint, or <c>null</c> for api.openai.com.</param>
+    /// <param name="providerDisplayName">Provider name used in <see cref="EngineName"/> (e.g. "OpenAI", "Groq").</param>
+    public OpenAICompatibleTranscriptionService(string apiKey, string model, Uri? endpoint, string providerDisplayName)
     {
         _apiKey = apiKey ?? string.Empty;
+        _model = string.IsNullOrWhiteSpace(model) ? "whisper-1" : model;
+        _endpoint = endpoint;
+        _providerDisplayName = providerDisplayName;
         RebuildClients();
     }
 
@@ -38,27 +46,33 @@ public sealed class CloudTranscriptionService : ITranscriptionService
     public bool IsAvailable => !string.IsNullOrWhiteSpace(_apiKey);
 
     /// <inheritdoc />
-    public string EngineName => "OpenAI Whisper (Cloud)";
+    public string EngineName => $"{_providerDisplayName} {_model} (Cloud)";
 
     /// <summary>
-    /// Updates the API key at runtime and rebuilds the underlying OpenAI clients.
-    /// This is useful when the user changes the key in application settings without restarting.
+    /// Updates the API key and/or model at runtime and rebuilds the client when either changed.
     /// </summary>
-    /// <param name="key">The new OpenAI API key.</param>
-    public void UpdateApiKey(string key)
+    /// <param name="apiKey">The new API key.</param>
+    /// <param name="model">The new model id.</param>
+    public void UpdateConfiguration(string apiKey, string model)
     {
         lock (_clientLock)
         {
-            _apiKey = key ?? string.Empty;
+            string newKey = apiKey ?? string.Empty;
+            string newModel = string.IsNullOrWhiteSpace(model) ? _model : model;
+
+            if (newKey == _apiKey && newModel == _model)
+                return;
+
+            _apiKey = newKey;
+            _model = newModel;
             RebuildClients();
         }
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// Sends the WAV audio data to the OpenAI Whisper API (<c>whisper-1</c> model).
-    /// The response includes the transcribed text. Elapsed wall-clock time is measured
-    /// and reported in the result's <see cref="TranscriptionResult.Duration"/> field.
+    /// Sends the WAV audio to the provider's <c>/audio/transcriptions</c> endpoint with the configured model.
+    /// Elapsed wall-clock time is reported in <see cref="TranscriptionResult.Duration"/>.
     /// </remarks>
     public async Task<TranscriptionResult> TranscribeAsync(
         byte[] audioData,
@@ -68,7 +82,7 @@ public sealed class CloudTranscriptionService : ITranscriptionService
     {
         if (!IsAvailable)
         {
-            return TranscriptionResult.Failure("OpenAI API key is not configured.");
+            return TranscriptionResult.Failure($"{_providerDisplayName} API key is not configured.");
         }
 
         AudioClient? client;
@@ -79,7 +93,7 @@ public sealed class CloudTranscriptionService : ITranscriptionService
 
         if (client is null)
         {
-            return TranscriptionResult.Failure("OpenAI client could not be initialized.");
+            return TranscriptionResult.Failure($"{_providerDisplayName} client could not be initialized.");
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -131,9 +145,9 @@ public sealed class CloudTranscriptionService : ITranscriptionService
         catch (ClientResultException ex)
         {
             stopwatch.Stop();
-            AppLogger.Log($"OpenAI API error: {ex.Status} - {ex.Message}");
+            AppLogger.Log($"{_providerDisplayName} API error: {ex.Status} - {ex.Message}");
             return TranscriptionResult.Failure(
-                $"OpenAI API error (HTTP {ex.Status}): {ex.Message}",
+                $"{_providerDisplayName} API error (HTTP {ex.Status}): {ex.Message}",
                 stopwatch.Elapsed);
         }
         catch (HttpRequestException ex)
@@ -155,19 +169,23 @@ public sealed class CloudTranscriptionService : ITranscriptionService
     }
 
     /// <summary>
-    /// Creates or recreates the OpenAI client instances using the current API key.
-    /// Called on construction and whenever the API key is updated.
+    /// Creates or recreates the audio client using the current key, model, and endpoint.
     /// </summary>
     private void RebuildClients()
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            _openAIClient = null;
             _audioClient = null;
             return;
         }
 
-        _openAIClient = new OpenAIClient(_apiKey);
-        _audioClient = _openAIClient.GetAudioClient("whisper-1");
+        var options = new OpenAIClientOptions();
+        if (_endpoint is not null)
+        {
+            options.Endpoint = _endpoint;
+        }
+
+        var openAIClient = new OpenAIClient(new ApiKeyCredential(_apiKey), options);
+        _audioClient = openAIClient.GetAudioClient(_model);
     }
 }
