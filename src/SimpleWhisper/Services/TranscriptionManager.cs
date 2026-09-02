@@ -4,8 +4,8 @@ namespace SimpleWhisper.Services;
 
 /// <summary>
 /// Orchestrates transcription requests by routing audio data to the appropriate transcription
-/// engine (cloud or local) based on the current application settings. Lazily initializes
-/// service instances and keeps them in sync with settings changes.
+/// engine (OpenAI, Gemini, Groq, Deepgram, or local) based on the current application settings.
+/// Lazily initializes service instances and keeps them in sync with settings changes.
 /// </summary>
 public sealed class TranscriptionManager : IDisposable
 {
@@ -13,6 +13,9 @@ public sealed class TranscriptionManager : IDisposable
     private readonly object _serviceLock = new();
 
     private OpenAICompatibleTranscriptionService? _openAIService;
+    private OpenAICompatibleTranscriptionService? _groqService;
+    private GeminiTranscriptionService? _geminiService;
+    private DeepgramTranscriptionService? _deepgramService;
     private LocalTranscriptionService? _localService;
 
     /// <summary>
@@ -66,15 +69,23 @@ public sealed class TranscriptionManager : IDisposable
         ITranscriptionService service = engine switch
         {
             TranscriptionEngine.Cloud => GetOrCreateOpenAIService(settings),
+            TranscriptionEngine.Groq => GetOrCreateGroqService(settings),
+            TranscriptionEngine.Gemini => GetOrCreateGeminiService(settings),
+            TranscriptionEngine.Deepgram => GetOrCreateDeepgramService(settings),
             TranscriptionEngine.Local => await GetOrCreateLocalServiceAsync(settings, language, prompt, cancellationToken),
             _ => throw new InvalidOperationException($"Unknown transcription engine: {engine}")
         };
 
         if (!service.IsAvailable)
         {
-            string reason = engine == TranscriptionEngine.Cloud
-                ? "OpenAI API key is not configured. Please add your key in Settings."
-                : "Local transcription engine is not available.";
+            string reason = engine switch
+            {
+                TranscriptionEngine.Cloud => "OpenAI API key is not configured. Please add your key in Settings.",
+                TranscriptionEngine.Groq => "Groq API key is not configured. Please add your key in Settings.",
+                TranscriptionEngine.Gemini => "Gemini API key is not configured. Please add your key in Settings.",
+                TranscriptionEngine.Deepgram => "Deepgram API key is not configured. Please add your key in Settings.",
+                _ => "Local transcription engine is not available."
+            };
 
             OnStatusChanged(reason);
             return TranscriptionResult.Failure(reason);
@@ -122,6 +133,71 @@ public sealed class TranscriptionManager : IDisposable
             }
 
             return _openAIService;
+        }
+    }
+
+    /// <summary>
+    /// Gets the Groq transcription service (OpenAI-compatible endpoint), creating it lazily
+    /// and keeping its key and model in sync with settings.
+    /// </summary>
+    private OpenAICompatibleTranscriptionService GetOrCreateGroqService(AppSettings settings)
+    {
+        lock (_serviceLock)
+        {
+            if (_groqService is null)
+            {
+                _groqService = new OpenAICompatibleTranscriptionService(
+                    settings.GroqApiKey,
+                    settings.GroqModel,
+                    OpenAICompatibleTranscriptionService.GroqEndpoint,
+                    providerDisplayName: "Groq");
+            }
+            else
+            {
+                _groqService.UpdateConfiguration(settings.GroqApiKey, settings.GroqModel);
+            }
+
+            return _groqService;
+        }
+    }
+
+    /// <summary>
+    /// Gets the Gemini transcription service, creating it lazily and syncing its configuration.
+    /// </summary>
+    private GeminiTranscriptionService GetOrCreateGeminiService(AppSettings settings)
+    {
+        lock (_serviceLock)
+        {
+            if (_geminiService is null)
+            {
+                _geminiService = new GeminiTranscriptionService(settings.GeminiApiKey, settings.GeminiModel);
+            }
+            else
+            {
+                _geminiService.UpdateConfiguration(settings.GeminiApiKey, settings.GeminiModel);
+            }
+
+            return _geminiService;
+        }
+    }
+
+    /// <summary>
+    /// Gets the Deepgram transcription service, creating it lazily and syncing its configuration.
+    /// </summary>
+    private DeepgramTranscriptionService GetOrCreateDeepgramService(AppSettings settings)
+    {
+        lock (_serviceLock)
+        {
+            if (_deepgramService is null)
+            {
+                _deepgramService = new DeepgramTranscriptionService(settings.DeepgramApiKey, settings.DeepgramModel);
+            }
+            else
+            {
+                _deepgramService.UpdateConfiguration(settings.DeepgramApiKey, settings.DeepgramModel);
+            }
+
+            return _deepgramService;
         }
     }
 
@@ -221,7 +297,8 @@ public sealed class TranscriptionManager : IDisposable
 
     /// <summary>
     /// Builds a prompt string from the user's custom vocabulary list.
-    /// The Whisper API uses the prompt to bias recognition toward these terms.
+    /// OpenAI-compatible engines receive this as a prompt; Gemini and Deepgram split it back
+    /// into terms via <see cref="RestTranscriptionHttp.SplitVocabularyPrompt"/>.
     /// </summary>
     /// <param name="vocabulary">The list of custom vocabulary words or phrases.</param>
     /// <returns>
@@ -260,6 +337,9 @@ public sealed class TranscriptionManager : IDisposable
             _localService?.Dispose();
             _localService = null;
             _openAIService = null;
+            _groqService = null;
+            _geminiService = null;
+            _deepgramService = null;
         }
     }
 }
