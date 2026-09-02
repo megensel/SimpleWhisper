@@ -28,8 +28,11 @@ public partial class SettingsWindow : Window
 
         InitializeComponent();
 
-        // Pre-populate the PasswordBox (PasswordBox does not support binding)
-        ApiKeyBox.Password = ViewModel.ApiKey;
+        // Pre-populate the PasswordBoxes (PasswordBox does not support binding)
+        OpenAIApiKeyBox.Password = ViewModel.OpenAIApiKey;
+        GeminiApiKeyBox.Password = ViewModel.GeminiApiKey;
+        GroqApiKeyBox.Password = ViewModel.GroqApiKey;
+        DeepgramApiKeyBox.Password = ViewModel.DeepgramApiKey;
 
         // Set up the replacement type combo column with enum values
         var typeColumn = (DataGridComboBoxColumn)ReplacementsGrid.Columns[2];
@@ -55,14 +58,30 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// PasswordBox doesn't support binding, so we sync manually on change.
+    /// PasswordBox doesn't support binding, so each provider's key is synced manually on change.
     /// </summary>
-    private void OnApiKeyChanged(object sender, RoutedEventArgs e)
+    private void OnOpenAIApiKeyChanged(object sender, RoutedEventArgs e)
     {
         if (sender is PasswordBox pb)
-        {
-            ViewModel.ApiKey = pb.Password;
-        }
+            ViewModel.OpenAIApiKey = pb.Password;
+    }
+
+    private void OnGeminiApiKeyChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox pb)
+            ViewModel.GeminiApiKey = pb.Password;
+    }
+
+    private void OnGroqApiKeyChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox pb)
+            ViewModel.GroqApiKey = pb.Password;
+    }
+
+    private void OnDeepgramApiKeyChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox pb)
+            ViewModel.DeepgramApiKey = pb.Password;
     }
 
     /// <summary>

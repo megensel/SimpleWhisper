@@ -270,31 +270,110 @@
                         <TextBlock Text="Engine" Style="{StaticResource SectionHeader}"/>
                         <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
                             <StackPanel>
-                                <RadioButton Content="Cloud (OpenAI Whisper API)"
-                                             IsChecked="{Binding IsCloudEngine}"
-                                             GroupName="Engine"/>
-                                <RadioButton Content="Local (Whisper.net, runs on device)"
-                                             IsChecked="{Binding IsLocalEngine}"
-                                             GroupName="Engine"/>
+                                <TextBlock Text="Transcription engine" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding EngineOptions}"
+                                          SelectedValue="{Binding SelectedEngine, Mode=TwoWay}"
+                                          SelectedValuePath="Engine"
+                                          DisplayMemberPath="DisplayName"
+                                          Style="{StaticResource DarkComboBox}"/>
                             </StackPanel>
                         </Border>
 
-                        <!-- Cloud Settings -->
+                        <!-- OpenAI Settings -->
                         <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
-                                Visibility="{Binding IsCloudEngine, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding IsOpenAIEngine, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Text="Cloud Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="OpenAI Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
                                 <TextBlock Text="OpenAI API Key" Style="{StaticResource FieldLabel}"/>
-                                <PasswordBox x:Name="ApiKeyBox"
+                                <PasswordBox x:Name="OpenAIApiKeyBox"
                                              Style="{StaticResource DarkPasswordBox}"
-                                             PasswordChanged="OnApiKeyChanged"
+                                             PasswordChanged="OnOpenAIApiKeyChanged"
                                              MaxLength="200"
                                              Margin="0,0,0,8"/>
-                                <TextBlock Margin="0,0,0,0">
+                                <TextBlock Text="Model" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding OpenAIModels}"
+                                          SelectedValue="{Binding OpenAIModel, Mode=TwoWay}"
+                                          SelectedValuePath="Id"
+                                          DisplayMemberPath="DisplayName"
+                                          Style="{StaticResource DarkComboBox}"
+                                          Margin="0,0,0,8"/>
+                                <TextBlock>
                                     <Hyperlink NavigateUri="https://platform.openai.com/api-keys"
                                                RequestNavigate="OnHyperlinkRequestNavigate"
                                                Foreground="{StaticResource AccentBrush}">
                                         Get an API key from OpenAI
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Gemini Settings -->
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                                Visibility="{Binding IsGeminiEngine, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Google Gemini Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Gemini API Key" Style="{StaticResource FieldLabel}"/>
+                                <PasswordBox x:Name="GeminiApiKeyBox"
+                                             Style="{StaticResource DarkPasswordBox}"
+                                             PasswordChanged="OnGeminiApiKeyChanged"
+                                             MaxLength="200"
+                                             Margin="0,0,0,8"/>
+                                <TextBlock Text="Model: gemini-3.5-transcribe" Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="https://aistudio.google.com/apikey"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="{StaticResource AccentBrush}">
+                                        Get an API key from Google AI Studio
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Groq Settings -->
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                                Visibility="{Binding IsGroqEngine, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Groq Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Groq API Key" Style="{StaticResource FieldLabel}"/>
+                                <PasswordBox x:Name="GroqApiKeyBox"
+                                             Style="{StaticResource DarkPasswordBox}"
+                                             PasswordChanged="OnGroqApiKeyChanged"
+                                             MaxLength="200"
+                                             Margin="0,0,0,8"/>
+                                <TextBlock Text="Model" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding GroqModels}"
+                                          SelectedValue="{Binding GroqModel, Mode=TwoWay}"
+                                          SelectedValuePath="Id"
+                                          DisplayMemberPath="DisplayName"
+                                          Style="{StaticResource DarkComboBox}"
+                                          Margin="0,0,0,8"/>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="https://console.groq.com/keys"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="{StaticResource AccentBrush}">
+                                        Get an API key from Groq
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Deepgram Settings -->
+                        <Border Background="{StaticResource PanelBg}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                                Visibility="{Binding IsDeepgramEngine, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Deepgram Settings" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Deepgram API Key" Style="{StaticResource FieldLabel}"/>
+                                <PasswordBox x:Name="DeepgramApiKeyBox"
+                                             Style="{StaticResource DarkPasswordBox}"
+                                             PasswordChanged="OnDeepgramApiKeyChanged"
+                                             MaxLength="200"
+                                             Margin="0,0,0,8"/>
+                                <TextBlock Text="Model: nova-3" Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="https://console.deepgram.com/"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="{StaticResource AccentBrush}">
+                                        Get an API key from Deepgram
                                     </Hyperlink>
                                 </TextBlock>
                             </StackPanel>
