@@ -21,11 +21,21 @@ public enum RecordingMode
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TranscriptionEngine
 {
-    /// <summary>OpenAI Whisper cloud API (requires API key and internet connection).</summary>
+    /// <summary>OpenAI cloud API (requires API key and internet connection).
+    /// The member is named <c>Cloud</c> for backward compatibility with existing settings files.</summary>
     Cloud,
 
     /// <summary>Local Whisper.net model (runs entirely on the local machine).</summary>
-    Local
+    Local,
+
+    /// <summary>Google Gemini API (gemini-3.5-transcribe). Requires a Gemini API key.</summary>
+    Gemini,
+
+    /// <summary>Groq cloud API (hosted Whisper, OpenAI-compatible endpoint). Requires a Groq API key.</summary>
+    Groq,
+
+    /// <summary>Deepgram cloud API (Nova-3). Requires a Deepgram API key.</summary>
+    Deepgram
 }
 
 /// <summary>
@@ -98,7 +108,7 @@ public class AppSettings
     public bool AutoDetectLanguage { get; set; }
 
     /// <summary>
-    /// Selects cloud (OpenAI API) or local (Whisper.net) transcription.
+    /// Selects which transcription engine is used: OpenAI (Cloud), Local (Whisper.net), Gemini, Groq, or Deepgram.
     /// </summary>
     [JsonPropertyName("engine")]
     public TranscriptionEngine Engine { get; set; } = TranscriptionEngine.Cloud;
@@ -118,6 +128,78 @@ public class AppSettings
     {
         get => Helpers.ApiKeyProtection.Unprotect(EncryptedOpenAIApiKey);
         set => EncryptedOpenAIApiKey = Helpers.ApiKeyProtection.Protect(value);
+    }
+
+    /// <summary>
+    /// OpenAI transcription model id (e.g. "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1").
+    /// </summary>
+    [JsonPropertyName("openAIModel")]
+    public string OpenAIModel { get; set; } = "gpt-4o-mini-transcribe";
+
+    /// <summary>
+    /// Gemini transcription model id. Currently only "gemini-3.5-transcribe" is supported.
+    /// </summary>
+    [JsonPropertyName("geminiModel")]
+    public string GeminiModel { get; set; } = "gemini-3.5-transcribe";
+
+    /// <summary>
+    /// DPAPI-encrypted Gemini API key stored as Base64.
+    /// </summary>
+    [JsonPropertyName("geminiApiKeyProtected")]
+    public string EncryptedGeminiApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Plaintext Gemini API key for runtime use. Not serialized to JSON.
+    /// </summary>
+    [JsonIgnore]
+    public string GeminiApiKey
+    {
+        get => Helpers.ApiKeyProtection.Unprotect(EncryptedGeminiApiKey);
+        set => EncryptedGeminiApiKey = Helpers.ApiKeyProtection.Protect(value);
+    }
+
+    /// <summary>
+    /// Groq transcription model id (e.g. "whisper-large-v3-turbo", "whisper-large-v3").
+    /// </summary>
+    [JsonPropertyName("groqModel")]
+    public string GroqModel { get; set; } = "whisper-large-v3-turbo";
+
+    /// <summary>
+    /// DPAPI-encrypted Groq API key stored as Base64.
+    /// </summary>
+    [JsonPropertyName("groqApiKeyProtected")]
+    public string EncryptedGroqApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Plaintext Groq API key for runtime use. Not serialized to JSON.
+    /// </summary>
+    [JsonIgnore]
+    public string GroqApiKey
+    {
+        get => Helpers.ApiKeyProtection.Unprotect(EncryptedGroqApiKey);
+        set => EncryptedGroqApiKey = Helpers.ApiKeyProtection.Protect(value);
+    }
+
+    /// <summary>
+    /// Deepgram transcription model id. Currently only "nova-3" is supported.
+    /// </summary>
+    [JsonPropertyName("deepgramModel")]
+    public string DeepgramModel { get; set; } = "nova-3";
+
+    /// <summary>
+    /// DPAPI-encrypted Deepgram API key stored as Base64.
+    /// </summary>
+    [JsonPropertyName("deepgramApiKeyProtected")]
+    public string EncryptedDeepgramApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Plaintext Deepgram API key for runtime use. Not serialized to JSON.
+    /// </summary>
+    [JsonIgnore]
+    public string DeepgramApiKey
+    {
+        get => Helpers.ApiKeyProtection.Unprotect(EncryptedDeepgramApiKey);
+        set => EncryptedDeepgramApiKey = Helpers.ApiKeyProtection.Protect(value);
     }
 
     /// <summary>
