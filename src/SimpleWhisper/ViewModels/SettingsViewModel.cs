@@ -40,9 +40,13 @@ public sealed class SettingsViewModel : ViewModelBase
     private int _outputVolumeReductionPercent;
 
     // Transcription
-    private bool _isCloudEngine;
-    private bool _isLocalEngine;
-    private string _apiKey = string.Empty;
+    private TranscriptionEngine _selectedEngine;
+    private string _openAIApiKey = string.Empty;
+    private string _geminiApiKey = string.Empty;
+    private string _groqApiKey = string.Empty;
+    private string _deepgramApiKey = string.Empty;
+    private string _openAIModel = string.Empty;
+    private string _groqModel = string.Empty;
     private string _selectedLanguage = string.Empty;
     private bool _autoDetectLanguage;
     private string _localModelSize = string.Empty;
@@ -278,53 +282,142 @@ public sealed class SettingsViewModel : ViewModelBase
     //  Transcription Tab Properties
     // ──────────────────────────────────────────────────────────────────
 
-    public bool IsCloudEngine
-    {
-        get => _isCloudEngine;
-        set
-        {
-            if (SetProperty(ref _isCloudEngine, value))
-            {
-                if (value)
-                {
-                    _isLocalEngine = false;
-                    OnPropertyChanged(nameof(IsLocalEngine));
-                    _settingsService.Settings.Engine = TranscriptionEngine.Cloud;
-                    SaveSettings();
-                }
-            }
-        }
-    }
-
-    public bool IsLocalEngine
-    {
-        get => _isLocalEngine;
-        set
-        {
-            if (SetProperty(ref _isLocalEngine, value))
-            {
-                if (value)
-                {
-                    _isCloudEngine = false;
-                    OnPropertyChanged(nameof(IsCloudEngine));
-                    _settingsService.Settings.Engine = TranscriptionEngine.Local;
-                    SaveSettings();
-                }
-            }
-        }
-    }
+    /// <summary>
+    /// All engines the user can pick, in display order.
+    /// </summary>
+    public IReadOnlyList<EngineOption> EngineOptions { get; } =
+    [
+        new(TranscriptionEngine.Cloud, "OpenAI (Cloud)"),
+        new(TranscriptionEngine.Gemini, "Google Gemini (Cloud)"),
+        new(TranscriptionEngine.Groq, "Groq (Cloud)"),
+        new(TranscriptionEngine.Deepgram, "Deepgram (Cloud)"),
+        new(TranscriptionEngine.Local, "Local (Whisper.net, runs on device)")
+    ];
 
     /// <summary>
-    /// OpenAI API key for cloud transcription.
+    /// The currently selected transcription engine. Setting it persists immediately and
+    /// refreshes every per-engine visibility flag.
     /// </summary>
-    public string ApiKey
+    public TranscriptionEngine SelectedEngine
     {
-        get => _apiKey;
+        get => _selectedEngine;
         set
         {
-            if (SetProperty(ref _apiKey, value))
+            if (SetProperty(ref _selectedEngine, value))
+            {
+                _settingsService.Settings.Engine = value;
+                SaveSettings();
+                OnPropertyChanged(nameof(IsOpenAIEngine));
+                OnPropertyChanged(nameof(IsGeminiEngine));
+                OnPropertyChanged(nameof(IsGroqEngine));
+                OnPropertyChanged(nameof(IsDeepgramEngine));
+                OnPropertyChanged(nameof(IsLocalEngine));
+            }
+        }
+    }
+
+    /// <summary>True when the OpenAI engine is selected. Drives the OpenAI settings panel.</summary>
+    public bool IsOpenAIEngine => _selectedEngine == TranscriptionEngine.Cloud;
+
+    /// <summary>True when the Gemini engine is selected. Drives the Gemini settings panel.</summary>
+    public bool IsGeminiEngine => _selectedEngine == TranscriptionEngine.Gemini;
+
+    /// <summary>True when the Groq engine is selected. Drives the Groq settings panel.</summary>
+    public bool IsGroqEngine => _selectedEngine == TranscriptionEngine.Groq;
+
+    /// <summary>True when the Deepgram engine is selected. Drives the Deepgram settings panel.</summary>
+    public bool IsDeepgramEngine => _selectedEngine == TranscriptionEngine.Deepgram;
+
+    /// <summary>True when the local engine is selected. Drives the Local settings panel.</summary>
+    public bool IsLocalEngine => _selectedEngine == TranscriptionEngine.Local;
+
+    /// <summary>OpenAI API key.</summary>
+    public string OpenAIApiKey
+    {
+        get => _openAIApiKey;
+        set
+        {
+            if (SetProperty(ref _openAIApiKey, value))
             {
                 _settingsService.Settings.OpenAIApiKey = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>Google Gemini API key.</summary>
+    public string GeminiApiKey
+    {
+        get => _geminiApiKey;
+        set
+        {
+            if (SetProperty(ref _geminiApiKey, value))
+            {
+                _settingsService.Settings.GeminiApiKey = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>Groq API key.</summary>
+    public string GroqApiKey
+    {
+        get => _groqApiKey;
+        set
+        {
+            if (SetProperty(ref _groqApiKey, value))
+            {
+                _settingsService.Settings.GroqApiKey = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>Deepgram API key.</summary>
+    public string DeepgramApiKey
+    {
+        get => _deepgramApiKey;
+        set
+        {
+            if (SetProperty(ref _deepgramApiKey, value))
+            {
+                _settingsService.Settings.DeepgramApiKey = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>Selectable OpenAI models.</summary>
+    public IReadOnlyList<TranscriptionModelOption> OpenAIModels { get; } =
+        TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Cloud);
+
+    /// <summary>Selectable Groq models.</summary>
+    public IReadOnlyList<TranscriptionModelOption> GroqModels { get; } =
+        TranscriptionModelCatalog.ModelsFor(TranscriptionEngine.Groq);
+
+    /// <summary>Selected OpenAI model id.</summary>
+    public string OpenAIModel
+    {
+        get => _openAIModel;
+        set
+        {
+            if (SetProperty(ref _openAIModel, value))
+            {
+                _settingsService.Settings.OpenAIModel = value;
+                SaveSettings();
+            }
+        }
+    }
+
+    /// <summary>Selected Groq model id.</summary>
+    public string GroqModel
+    {
+        get => _groqModel;
+        set
+        {
+            if (SetProperty(ref _groqModel, value))
+            {
+                _settingsService.Settings.GroqModel = value;
                 SaveSettings();
             }
         }
@@ -586,9 +679,13 @@ public sealed class SettingsViewModel : ViewModelBase
         _outputVolumeReductionPercent = s.OutputVolumeReductionPercent;
 
         // Transcription
-        _isCloudEngine = s.Engine == TranscriptionEngine.Cloud;
-        _isLocalEngine = s.Engine == TranscriptionEngine.Local;
-        _apiKey = s.OpenAIApiKey;
+        _selectedEngine = s.Engine;
+        _openAIApiKey = s.OpenAIApiKey;
+        _geminiApiKey = s.GeminiApiKey;
+        _groqApiKey = s.GroqApiKey;
+        _deepgramApiKey = s.DeepgramApiKey;
+        _openAIModel = OpenAIModels.Any(m => m.Id == s.OpenAIModel) ? s.OpenAIModel : OpenAIModels[0].Id;
+        _groqModel = GroqModels.Any(m => m.Id == s.GroqModel) ? s.GroqModel : GroqModels[0].Id;
         _selectedLanguage = s.Language;
         _autoDetectLanguage = s.AutoDetectLanguage;
         _localModelSize = s.LocalModelSize;
@@ -819,3 +916,10 @@ public sealed class GpuAccelerationItem(GpuAcceleration value, string displayNam
 
     public override string ToString() => DisplayName;
 }
+
+/// <summary>
+/// One entry in the engine picker.
+/// </summary>
+/// <param name="Engine">The engine value stored in settings.</param>
+/// <param name="DisplayName">Label shown in the ComboBox.</param>
+public sealed record EngineOption(TranscriptionEngine Engine, string DisplayName);
