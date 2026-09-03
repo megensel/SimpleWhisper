@@ -1764,4 +1764,7 @@ Any failure goes back to the owning task's implementer model with the log excerp
 | 1 | PASS | Old settings (engine=Cloud, OpenAI key, no model field) loaded; dropdown shows 5 engines, OpenAI (Cloud) selected, model gpt-4o-mini-transcribe. Key box populated: confirmed. |
 | 2 | PASS | gpt-4o-mini-transcribe: vocabulary term spelled correctly, pasted ~3 s after release; log 17:18:48 shows clipboard set and text inserted. |
 | 11 | PASS | Local (Whisper.net, medium.en, CUDA) panel intact; real-time preview and paste work. |
-| 3, 4, 5, 6, 7, 8, 9, 10, 12, 13 | NOT RUN | User ended the session after rows 1, 2, 11. Rows 5–9 and 13 need Gemini, Groq, and Deepgram keys; no live call to those providers has been made yet. |
+| 5 | PASS | Gemini transcribed two dictations correctly (log 07:20:21, 07:20:40), ~2 s each. Uncovered a pre-existing bug: the update checker saves settings, which fires SettingsChanged and deactivates an in-progress recording (see below). |
+| 3, 4, 6, 7, 8, 9, 10, 12, 13 | NOT RUN | User ended the session after rows 1, 2, 5, 11. Rows 5–9 and 13 need Gemini, Groq, and Deepgram keys; no live call to those providers has been made yet. |
+
+**Bug found during row 5 (pre-existing, not 1.5.0):** `UpdateService` saves `LastUpdateCheck` after each check → `SettingsService.Save()` raises `SettingsChanged` → `App.OnSettingsChanged` calls `InputTriggerService.UpdateTrigger/UpdateMode`, which unconditionally deactivate an active trigger, and restarts the update checker (15 s initial delay), so the cycle repeats every ~15 s and any recording spanning a check is cut off. Log evidence: 07:12:03, 07:13:06, 07:20:38 all show Checking for updates → DEACTIVATED → Settings changed within 5 ms.
