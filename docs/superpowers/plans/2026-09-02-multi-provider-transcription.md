@@ -1756,3 +1756,12 @@ Any failure goes back to the owning task's implementer model with the log excerp
 - **Spec coverage:** engine enum + compat (T1), per-provider keys (T1, T6, T7), model selection (T1, T6, T7), OpenAI SDK upgrade and generalization (T2), Gemini (T3), Deepgram (T4), Groq via endpoint (T2, T5), routing and per-engine messages (T5), vocabulary array handling (T3, T4 via `SplitVocabularyPrompt`), UI (T7), App.xaml.cs untouched (spec), version/changelog (T8), manual matrix (T9).
 - **Type consistency:** `UpdateConfiguration(string apiKey, string model)` on all three cloud service classes; `TranscriptionModelOption(Id, DisplayName)` used by catalog, VM, and XAML `SelectedValuePath="Id"`; `EngineOption(Engine, DisplayName)` matches `SelectedValuePath="Engine"`; `RestTranscriptionHttp.SplitVocabularyPrompt` referenced by T3, T4, T5 comment.
 - **Ordering:** T6 intentionally leaves the build red until T7; the orchestrator should dispatch T6 and T7 back-to-back and only run the reviewer gate after T7 builds, or merge T6+T7 into one implementer if preferred.
+
+## Task 9 results — 2026-09-02, build 1.5.0 (master ac99452)
+
+| # | Result | Notes |
+|---|---|---|
+| 1 | PASS | Old settings (engine=Cloud, OpenAI key, no model field) loaded; dropdown shows 5 engines, OpenAI (Cloud) selected, model gpt-4o-mini-transcribe. Key box populated: confirmed. |
+| 2 | PASS | gpt-4o-mini-transcribe: vocabulary term spelled correctly, pasted ~3 s after release; log 17:18:48 shows clipboard set and text inserted. |
+| 11 | PASS | Local (Whisper.net, medium.en, CUDA) panel intact; real-time preview and paste work. |
+| 3, 4, 5, 6, 7, 8, 9, 10, 12, 13 | NOT RUN | User ended the session after rows 1, 2, 11. Rows 5–9 and 13 need Gemini, Groq, and Deepgram keys; no live call to those providers has been made yet. |
