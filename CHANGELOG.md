@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI NuGet package upgraded from 2.9.1 to 2.13.0.
 - New installs and existing installs default to `gpt-4o-mini-transcribe` instead of `whisper-1`.
 
+### Fixed
+- Recordings no longer stop on their own every ~15 seconds. The update checker's settings save was re-applying the trigger configuration, which deactivated any in-progress recording and rescheduled another check.
+
 ## [1.4.0] - 2026-08-19
 
 ### Added
