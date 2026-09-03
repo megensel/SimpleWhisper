@@ -369,6 +369,9 @@
                                              MaxLength="200"
                                              Margin="0,0,0,8"/>
                                 <TextBlock Text="{Binding DeepgramModelDisplayName}" Style="{StaticResource FieldLabel}" Margin="0,0,0,8"/>
+                                <TextBlock Text="Auto-detect language adds several seconds on Deepgram; set a language for fastest results."
+                                           Style="{StaticResource FieldLabel}" TextWrapping="Wrap" FontSize="11"
+                                           Margin="0,0,0,8"/>
                                 <TextBlock>
                                     <Hyperlink NavigateUri="https://console.deepgram.com/"
                                                RequestNavigate="OnHyperlinkRequestNavigate"
