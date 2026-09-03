@@ -40,6 +40,12 @@ public partial class App : Application
     private InputTriggerService? _inputTriggerService;
     private AudioCaptureService? _audioCaptureService;
     private TranscriptionManager? _transcriptionManager;
+
+    /// <summary>
+    /// Last-applied value of <see cref="AppSettings.AutoCheckForUpdates"/>, so the settings-changed
+    /// handler only restarts the update checker when that setting actually flips.
+    /// </summary>
+    private bool _lastAutoCheckForUpdates;
     private TextInsertionService? _textInsertionService;
     private OutputVolumeService? _outputVolumeService;
     private OverlayWindow? _overlayWindow;
@@ -195,6 +201,7 @@ public partial class App : Application
         // 9. Set up auto-update service
         UpdateService = new UpdateService(Settings);
         UpdateService.UpdateAvailable += OnUpdateAvailable;
+        _lastAutoCheckForUpdates = Settings.Settings.AutoCheckForUpdates;
         if (Settings.Settings.AutoCheckForUpdates)
         {
             UpdateService.StartPeriodicCheck();
@@ -918,11 +925,18 @@ public partial class App : Application
         _inputTriggerService?.UpdateTrigger(settings.Trigger);
         _inputTriggerService?.UpdateMode(settings.RecordingMode);
 
-        // Reconfigure update checker
-        if (settings.AutoCheckForUpdates)
-            UpdateService?.StartPeriodicCheck();
-        else
-            UpdateService?.StopPeriodicCheck();
+        // Reconfigure the update checker only when the setting itself changed.
+        // The checker saves settings after every check; restarting it here on every
+        // save would schedule another check 15 s later and loop indefinitely.
+        if (settings.AutoCheckForUpdates != _lastAutoCheckForUpdates)
+        {
+            _lastAutoCheckForUpdates = settings.AutoCheckForUpdates;
+
+            if (settings.AutoCheckForUpdates)
+                UpdateService?.StartPeriodicCheck();
+            else
+                UpdateService?.StopPeriodicCheck();
+        }
 
         AppLogger.Log("Settings changed — services reconfigured.");
     }

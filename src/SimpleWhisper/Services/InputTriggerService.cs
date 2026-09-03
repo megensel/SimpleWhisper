@@ -152,6 +152,11 @@ public sealed class InputTriggerService : IDisposable
 
         lock (_configLock)
         {
+            // Reapplying an identical binding must not disturb an in-progress recording
+            // (settings are re-saved by background services such as the update checker).
+            if (_trigger.IsSameBindingAs(trigger))
+                return;
+
             _trigger = trigger;
         }
 
@@ -177,6 +182,10 @@ public sealed class InputTriggerService : IDisposable
     {
         lock (_configLock)
         {
+            // Same mode: nothing to do, and never interrupt an active recording.
+            if (_mode == mode)
+                return;
+
             _mode = mode;
         }
 

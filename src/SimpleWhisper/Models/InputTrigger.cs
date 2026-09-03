@@ -74,6 +74,19 @@ public class InputTrigger
     public bool Shift { get; set; }
 
     /// <summary>
+    /// Returns <c>true</c> when <paramref name="other"/> describes the same binding
+    /// (type, key, mouse button, and modifiers). Used to skip no-op reconfiguration.
+    /// </summary>
+    public bool IsSameBindingAs(InputTrigger? other) =>
+        other is not null
+        && Type == other.Type
+        && string.Equals(Key, other.Key, StringComparison.OrdinalIgnoreCase)
+        && MouseButton == other.MouseButton
+        && Ctrl == other.Ctrl
+        && Alt == other.Alt
+        && Shift == other.Shift;
+
+    /// <summary>
     /// Human-readable display string for the trigger, e.g. "F8", "Ctrl+Middle Click", "Shift+XButton1".
     /// </summary>
     [JsonIgnore]
