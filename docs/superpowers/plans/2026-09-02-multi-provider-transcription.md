@@ -1768,6 +1768,20 @@ Any failure goes back to the owning task's implementer model with the log excerp
 | 7 | PASS | Groq whisper-large-v3-turbo: two dictations correct, ~0.4–0.9 s from stop to transcript (log 09:47:58, 09:48:07). A 1.8 s silent clip at 09:48:13 was correctly flagged as silent and skipped. |
 | 8 | PASS | Deepgram nova-3 with vocabulary keyterm: correct transcript, ~6.4 s from stop to transcript (log 11:06:29 → 11:06:35). With auto-detect on: 6.4 s. With English selected: 0.7 s (log 11:13:36 → 11:13:37). Deepgram's detect_language adds ~5 s; leave auto-detect off for Deepgram. |
 | 13 | PASS | Covered by row 8: auto-detect language + custom vocabulary on Deepgram returned a transcript, no HTTP 400. |
-| 3, 4, 6, 9, 10, 12 | NOT RUN | Remaining after the 2026-09-03 session. |
+| 12 | PARTIAL | After the 2026-09-03 11:17 restart, settings.json holds the engine, all four keys, and all four model ids. UI confirmation (Settings shows Deepgram selected with a filled key box) not yet done. |
+| 3, 4, 6, 9, 10 | NOT RUN | Deferred by user on 2026-09-03. See "Testing still outstanding" below. |
+
+### Testing still outstanding (as of 2026-09-03)
+
+All four cloud engines have transcribed live at least once (rows 2, 5, 7, 8). The untested paths are error handling, cancellation, and non-English input:
+
+- **Row 3** OpenAI whisper-1 model selection works end to end.
+- **Row 4** Empty OpenAI key → "OpenAI API key is not configured" balloon, no crash. (Startup prompt for a missing key on the non-OpenAI engines, added in the final review fix wave, is also unverified.)
+- **Row 6** Invalid Gemini key → "Gemini API error (HTTP 400/403…)" message, no crash. Also unverified: the new timeout message path ("Request timed out after 60 seconds.") on Gemini/Deepgram.
+- **Row 9** Spanish auto-detect on Deepgram and Gemini returns Spanish text.
+- **Row 10** Esc during "Processing…" on a cloud engine returns to idle within a second and logs "Transcription was cancelled."
+- **Row 12** UI half: Settings shows the persisted engine and key after restart.
+- Groq with `whisper-large-v3` (non-turbo) has not been selected; only turbo was exercised.
+- Deepgram with a language other than English set explicitly has not been tried.
 
 **Bug found during row 5 (pre-existing, not 1.5.0):** `UpdateService` saves `LastUpdateCheck` after each check → `SettingsService.Save()` raises `SettingsChanged` → `App.OnSettingsChanged` calls `InputTriggerService.UpdateTrigger/UpdateMode`, which unconditionally deactivate an active trigger, and restarts the update checker (15 s initial delay), so the cycle repeats every ~15 s and any recording spanning a check is cut off. Log evidence: 07:12:03, 07:13:06, 07:20:38 all show Checking for updates → DEACTIVATED → Settings changed within 5 ms.
