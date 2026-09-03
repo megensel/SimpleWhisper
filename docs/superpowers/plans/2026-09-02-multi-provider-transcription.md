@@ -1766,7 +1766,7 @@ Any failure goes back to the owning task's implementer model with the log excerp
 | 11 | PASS | Local (Whisper.net, medium.en, CUDA) panel intact; real-time preview and paste work. |
 | 5 | PASS | Gemini transcribed two dictations correctly (log 07:20:21, 07:20:40), ~2 s each. Uncovered a pre-existing bug: the update checker saves settings, which fires SettingsChanged and deactivates an in-progress recording (see below). |
 | 7 | PASS | Groq whisper-large-v3-turbo: two dictations correct, ~0.4–0.9 s from stop to transcript (log 09:47:58, 09:48:07). A 1.8 s silent clip at 09:48:13 was correctly flagged as silent and skipped. |
-| 8 | PASS | Deepgram nova-3 with vocabulary keyterm: correct transcript, ~6.4 s from stop to transcript (log 11:06:29 → 11:06:35). Slower than the others; auto-detect language was on. |
+| 8 | PASS | Deepgram nova-3 with vocabulary keyterm: correct transcript, ~6.4 s from stop to transcript (log 11:06:29 → 11:06:35). With auto-detect on: 6.4 s. With English selected: 0.7 s (log 11:13:36 → 11:13:37). Deepgram's detect_language adds ~5 s; leave auto-detect off for Deepgram. |
 | 13 | PASS | Covered by row 8: auto-detect language + custom vocabulary on Deepgram returned a transcript, no HTTP 400. |
 | 3, 4, 6, 9, 10, 12 | NOT RUN | Remaining after the 2026-09-03 session. |
 
