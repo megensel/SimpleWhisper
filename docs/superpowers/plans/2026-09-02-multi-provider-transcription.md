@@ -1765,6 +1765,9 @@ Any failure goes back to the owning task's implementer model with the log excerp
 | 2 | PASS | gpt-4o-mini-transcribe: vocabulary term spelled correctly, pasted ~3 s after release; log 17:18:48 shows clipboard set and text inserted. |
 | 11 | PASS | Local (Whisper.net, medium.en, CUDA) panel intact; real-time preview and paste work. |
 | 5 | PASS | Gemini transcribed two dictations correctly (log 07:20:21, 07:20:40), ~2 s each. Uncovered a pre-existing bug: the update checker saves settings, which fires SettingsChanged and deactivates an in-progress recording (see below). |
-| 3, 4, 6, 7, 8, 9, 10, 12, 13 | NOT RUN | User ended the session after rows 1, 2, 5, 11. Rows 5–9 and 13 need Gemini, Groq, and Deepgram keys; no live call to those providers has been made yet. |
+| 7 | PASS | Groq whisper-large-v3-turbo: two dictations correct, ~0.4–0.9 s from stop to transcript (log 09:47:58, 09:48:07). A 1.8 s silent clip at 09:48:13 was correctly flagged as silent and skipped. |
+| 8 | PASS | Deepgram nova-3 with vocabulary keyterm: correct transcript, ~6.4 s from stop to transcript (log 11:06:29 → 11:06:35). Slower than the others; auto-detect language was on. |
+| 13 | PASS | Covered by row 8: auto-detect language + custom vocabulary on Deepgram returned a transcript, no HTTP 400. |
+| 3, 4, 6, 9, 10, 12 | NOT RUN | Remaining after the 2026-09-03 session. |
 
 **Bug found during row 5 (pre-existing, not 1.5.0):** `UpdateService` saves `LastUpdateCheck` after each check → `SettingsService.Save()` raises `SettingsChanged` → `App.OnSettingsChanged` calls `InputTriggerService.UpdateTrigger/UpdateMode`, which unconditionally deactivate an active trigger, and restarts the update checker (15 s initial delay), so the cycle repeats every ~15 s and any recording spanning a check is cut off. Log evidence: 07:12:03, 07:13:06, 07:20:38 all show Checking for updates → DEACTIVATED → Settings changed within 5 ms.
